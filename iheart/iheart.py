@@ -5,6 +5,12 @@ import json
 import time
 import os
 
+
+# Install VLC on windows
+# certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
+# vlc-3.0.8-win32.exe /L=1033 /S
+
+
 new_user_url = 'https://us.api.iheart.com/api/v1/account/loginOrCreateOauthUser'
 markets_url = 'https://us.api.iheart.com/api/v2/content/markets?countryCode=US&limit=1&cache=true&zipCode={}'
 search_url = 'https://us.api.iheart.com/api/v3/search/all'
@@ -95,7 +101,7 @@ def get_meta(stream_id):
 		raise Exception(res.text)
 
 def play(mrl, t=20):
-	inst = vlc.Instance() # Create a VLC instance
+	inst = vlc.Instance("--adaptive-use-access") # Create a VLC instance
 	p = inst.media_player_new() # Create a player instance
 	# cmd1 = "sout=file/ts:%s" % outfile
 	media = inst.media_new(mrl)
@@ -126,8 +132,7 @@ if __name__ == "__main__":
 	print("============================")
 	printjson(stream)
 
-	play(stream['streams']['hls_stream'], t=100)
+	play(stream['streams']['hls_stream'], t=30)
 
 	print(get_meta(first_station['id']))
-
 
