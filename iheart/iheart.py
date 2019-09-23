@@ -396,7 +396,7 @@ class ArtistStation(object):
 
 		def _play():
 			for self.current_track in self._track_gen():
-				print(self.current_track)
+				print("\r"+str(self.current_track))
 				player = MediaPlayer.get_player(self.current_track.mrl)
 				try:
 					player.play()
@@ -412,6 +412,7 @@ class ArtistStation(object):
 						time.sleep(1)
 				except:
 					traceback.print_exc()
+					print("HOOO--------")
 				finally:
 					sys.stdout.write("\033[?25h")
 					player.stop()
@@ -419,8 +420,12 @@ class ArtistStation(object):
 		self.player_thread = threading.Thread(target=_play)
 		self.player_thread.daemon = True
 		self.player_thread.start()
-		self.player_thread.join()
-		sys.stdout.write("\n")
+		try:
+			self.player_thread.join()
+		finally:
+			sys.stdout.write("\033[?25h")
+			sys.stdout.write("\n")
+			MediaPlayer.get_player(self.current_track.mrl).stop()
 
 
 	def toggle_pause(self, pause=True):
@@ -501,8 +506,12 @@ def test_stations():
 
 
 def test_artist_radio():
+	if len(sys.argv) > 1:
+		artist_keyword = sys.argv[1].strip()
+	else:
+		artist_keyword = input("Search for artist: ")
 	radio = iHeart()
-	artists = radio.search("Talking heads", category=iHeart.ARTISTS)
+	artists = radio.search(artist_keyword, category=iHeart.ARTISTS)
 	artists[0].play()
 
 
