@@ -421,11 +421,10 @@ class ArtistStation(object):
 		self.player_thread.daemon = True
 		self.player_thread.start()
 		try:
-			self.player_thread.join()
+			while self.player_thread.is_alive():
+				self.player_thread.join(0.5)
 		finally:
-			sys.stdout.write("\033[?25h")
-			sys.stdout.write("\n")
-			MediaPlayer.get_player(self.current_track.mrl).stop()
+			sys.stdout.write("\033[?25h\n")
 
 
 	def toggle_pause(self, pause=True):
