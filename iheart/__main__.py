@@ -39,7 +39,7 @@ def search_stations(radio, keyword=None):
 		keyword = input("Search for station: ")
 	if not keyword.strip():
 		return None
-	station_list = radio.search(keyword.strip())
+	station_list = radio.search(keyword.strip(), category=radio.ARTISTS)
 
 	if len(station_list)==0:
 		return None
@@ -96,7 +96,7 @@ def main():
 				new_station = None
 				continue
 
-			elif not station.is_playing(): # station is not None
+			elif not station.is_playing() and not station.is_paused(): # station is not None
 				station.play()
 
 			print(station)
@@ -108,10 +108,10 @@ def main():
 					raise Exception("Exit!")
 				if cmd == 'p':
 					if station.is_playing():
-						station.stop()
+						station.toggle_pause(True)
 						print("paused")
 					else:
-						break
+						station.toggle_pause(False)
 				elif cmd == 'l':
 					new_station = search_stations(radio=radio, keyword=station.search_term)
 					break

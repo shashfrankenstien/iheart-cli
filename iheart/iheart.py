@@ -23,7 +23,6 @@ meta_url = 'https://us.api.iheart.com/api/v3/live-meta/stream/{stream_id}/curren
 
 
 
-#TODO artist
 artist_url = 'https://us.api.iheart.com/api/v1/catalog/getArtistByArtistId?artistId={artist_id}' #GET
 artist_profile_url = 'https://us.api.iheart.com/api/v3/artists/profiles/{artist_id}' #GET
 similar_artists_url = 'https://us.api.iheart.com/api/v1/catalog/artist/{artist_id}/getSimilar' #GET
@@ -186,6 +185,7 @@ class MediaPlayer(object):
 		self.inst = None
 		self.plr = None
 		self.list_player = False
+		self._paused = False
 
 	@classmethod
 	def get_player(cls, mrl):
@@ -225,6 +225,9 @@ class MediaPlayer(object):
 	def is_playing(self):
 		return self.plr is not None and self.plr.is_playing()
 
+	def is_paused(self):
+		return self._paused
+
 	def stop(self):
 		if self.plr is not None:
 			self.plr.stop()
@@ -248,6 +251,7 @@ class MediaPlayer(object):
 
 	def toggle_pause(self, pause=True):
 		self.plr.set_pause(1 if pause else 0)
+		self._paused = pause
 		time.sleep(0.1)
 		return self.is_playing()
 		# return self.plr.get_state()
@@ -255,20 +259,59 @@ class MediaPlayer(object):
 
 
 
+class Station(object):
+
+	def __init__(self, station_id, mrl=None):
+		self.id = station_id
+		self.mrl = mrl
+
+	def __str__(self):
+		return "<station:{}:{}>".format(self.id, self.mrl)
+
+	def play(self):
+		if self.mrl is not None:
+			MediaPlayer.get_player(self.mrl).play()
+
+	def toggle_pause(self, pause=True):
+		if self.mrl is not None:
+			return MediaPlayer.get_player(self.mrl).toggle_pause(pause=pause)
+
+	def stop(self):
+		if self.mrl is not None:
+			MediaPlayer.get_player(self.mrl).stop()
+
+	def is_playing(self):
+		return self.mrl is not None and MediaPlayer.get_player(self.mrl).is_playing()
+
+	def is_paused(self):
+		return self.mrl is not None and MediaPlayer.get_player(self.mrl).is_paused()
+
+	def forward(self):
+		if self.mrl is not None:
+			MediaPlayer.get_player(self.mrl).forward()
+
+	def rewind(self):
+		if self.mrl is not None:
+			MediaPlayer.get_player(self.mrl).forward()
+
+	def info(self):
+		return {'mrl': self.mrl, 'id': self.id}
 
 
 
-class RadioStation(object):
+
+class RadioStation(Station):
 	def __init__(self, station_dict, search_term):
 		if 'id' not in station_dict:
 			raise Exception("station id not found")
-		self.id = station_dict['id']
+		super(RadioStation, self).__init__(station_id=station_dict['id'])
+		# self.id = station_dict['id']
 		self.name = station_dict.get('name')
 		self.description = (station_dict.get('description') or '').strip()
 		self.callLetters = station_dict.get('callLetters')
 		self.frequency = station_dict.get('frequency')
 		self.imageUrl = station_dict.get('imageUrl')
-		self.mrl = None
+		# self.mrl = None
 
 		self.search_term = search_term
 		self.search_score = station_dict.get('score')
@@ -304,12 +347,8 @@ class RadioStation(object):
 		elif not self.is_playing():
 			self.play()
 
-	def stop(self):
-		if self.mrl is not None:
-			MediaPlayer.get_player(self.mrl).stop()
-
-	def is_playing(self):
-		return self.mrl is not None and MediaPlayer.get_player(self.mrl).is_playing()
+	def is_paused(self):
+		return self.is_playing()
 
 	def info(self):
 		try:
@@ -317,11 +356,7 @@ class RadioStation(object):
 		except Exception as e:
 			print(e)
 
-	def forward(self):
-		MediaPlayer.get_player(self.mrl).forward()
 
-	def rewind(self):
-		MediaPlayer.get_player(self.mrl).forward()
 
 
 
@@ -347,7 +382,7 @@ class Track(object):
 
 	def __str__(self):
 		s = '''<Track: "{}" by "{}" on "{}"'''.format(self.name, self.artist, self.artist)
-		if self.version is not None:
+		if self.version:
 			s += " [" + self.version + "]"
 		s += ">"
 		return s
@@ -358,14 +393,14 @@ class Track(object):
 
 
 
-class ArtistStation(object):
+class ArtistStation(Station):
 	def __init__(self, artist_dict, search_term, user_id):
 		self.user_id = user_id
-
 		self._artist_dict = artist_dict
 		if 'id' not in self._artist_dict:
 			raise Exception("station id not found")
-		self.id = self._artist_dict['id']
+		super(ArtistStation, self).__init__(station_id=self._artist_dict['id'])
+
 		self.name = self._artist_dict.get('name')
 		self.imageUrl = self._artist_dict.get('image')
 
@@ -373,18 +408,19 @@ class ArtistStation(object):
 		self.search_score = self._artist_dict.get('score')
 		self.rank = self._artist_dict.get('rank')
 
-		self.station_id = None
+		self.station_hash = None
 		self.tracks = []
 		self.current_track = None
 		self.player_thread = None
+		self.stopped = False
 
 	def __str__(self):
-		return "<artist:{}:>".format(self.name)
+		return "<artist:{}:{}>".format(self.name, self.id)
 
 	def _track_gen(self):
 		while True:
 			station_data = iget_artist_station(self.user_id, self.id)
-			self.station_id = station_data['id']
+			self.station_hash = station_data['id']
 			for strm in iget_artist_streams(station_data['id']):
 				yield Track(strm)
 
@@ -396,44 +432,52 @@ class ArtistStation(object):
 
 		def _play():
 			for self.current_track in self._track_gen():
+				self.stopped = False
+				self.mrl = self.current_track.mrl
 				print("\r"+str(self.current_track))
-				player = MediaPlayer.get_player(self.current_track.mrl)
+				player = MediaPlayer.get_player(self.mrl)
 				try:
 					player.play()
-					time.sleep(0.5)
+					time.sleep(1)
 					m = self.current_track.length // 60
-					s = self.current_track.length % 60
-					sys.stdout.write("\033[?25l")
-					while player.is_playing():
+					s = (self.current_track.length % 60) - 1
+					# sys.stdout.write("\033[?25l")
+					print('\rplaying =', player.is_playing(), "paused =", player.is_paused())
+					while player.is_playing() or player.is_paused():
+						while player.is_paused():
+							time.sleep(0.2)
+
 						s = (s-1)%60
 						if s==0:
 							m-=1
-						sys.stdout.write("\r{:02d}:{:02d}".format(m, s))
+						seconds = s if m>=0 else 0
+						minutes = max(m, 0)
+						sys.stdout.write("\r{:02d}:{:02d}".format(minutes, seconds))
 						time.sleep(1)
 				except:
 					traceback.print_exc()
 					print("HOOO--------")
 				finally:
-					sys.stdout.write("\033[?25h")
+					# sys.stdout.write("\033[?25h")
 					player.stop()
+					self.mrl = None
+					if self.stopped:
+						return None
 
 		self.player_thread = threading.Thread(target=_play)
 		self.player_thread.daemon = True
 		self.player_thread.start()
+
+
+	def wait(self):
 		try:
 			while self.player_thread.is_alive():
 				self.player_thread.join(0.5)
 		finally:
-			sys.stdout.write("\033[?25h\n")
-
-
-	def toggle_pause(self, pause=True):
-		if self.current_track is not None:
-			return MediaPlayer.get_player(self.current_track.mrl).toggle_pause(pause=pause)
-
-	def stop(self):
-		if self.current_track is not None:
+			# sys.stdout.write("\033[?25h\n")
+			sys.stdout.write("\n")
 			MediaPlayer.get_player(self.current_track.mrl).stop()
+
 
 	def is_playing(self):
 		return self.current_track is not None \
@@ -441,19 +485,19 @@ class ArtistStation(object):
 			and self.player_thread.is_alive() \
 			and MediaPlayer.get_player(self.current_track.mrl).is_playing()
 
+	def stop(self):
+		self.stopped = True
+		super().stop()
+
 	def info(self):
 		try:
 			return vars(self.current_track)
 		except Exception as e:
 			print(e)
 
+
 	def forward(self):
-		MediaPlayer.get_player(self.current_track.mrl).forward()
-
-	def rewind(self):
-		MediaPlayer.get_player(self.current_track.mrl).forward()
-
-
+		super().stop()
 
 
 
@@ -512,6 +556,9 @@ def test_artist_radio():
 	radio = iHeart()
 	artists = radio.search(artist_keyword, category=iHeart.ARTISTS)
 	artists[0].play()
+	time.sleep(10)
+	artists[0].stop()
+	artists[0].wait()
 
 
 
