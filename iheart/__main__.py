@@ -1,5 +1,4 @@
 import os, sys
-import termios
 import traceback
 from iheart import iHeart
 
@@ -103,6 +102,7 @@ def main():
 
 			while True:
 				cmd = getch().strip().lower()
+				if isinstance(cmd, bytes): cmd = cmd.decode('utf-8', errors='ignore')
 				sys.stdout.write("\r")
 				if cmd == 'q':
 					raise Exception("Exit!")
