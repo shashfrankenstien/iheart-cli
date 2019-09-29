@@ -6,7 +6,6 @@ import json
 import time
 import logging
 import traceback
-import threading
 
 # Install VLC on windows
 # certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
@@ -176,9 +175,12 @@ def iget_artist_streams(astream_id):
 # **************************************************************************************
 
 
-class MediaPlayer(object):
+class VLCPlayer(object):
 	'''https://www.olivieraubert.net/vlc/python-ctypes/doc/'''
-	PLAYER = None
+
+	POSITION_CHANGED = vlc.EventType.MediaPlayerPositionChanged
+	END_REACHED = vlc.EventType.MediaPlayerEndReached
+	_PLAYER = None
 
 	def __init__(self, mrl):
 		self.mrl = mrl
@@ -186,21 +188,29 @@ class MediaPlayer(object):
 		self.plr = None
 		self.list_player = False
 		self._paused = False
+		self._manager = None
+		self._events_registry = {}
 
 	@classmethod
 	def get_player(cls, mrl):
-		if cls.PLAYER is None:
-			cls.PLAYER = cls(mrl)
-		elif mrl!=cls.PLAYER.mrl:
-			cls.PLAYER.stop()
-			cls.PLAYER = cls(mrl)
-		return cls.PLAYER
+		if cls._PLAYER is None:
+			cls._PLAYER = cls(mrl)
+		elif mrl!=cls._PLAYER.mrl:
+			cls._PLAYER.stop()
+			cls._PLAYER = cls(mrl)
+		return cls._PLAYER
 
-	def get_vlc_player(self):
+	def get_internal_player(self):
 		if self.list_player:
 			return self.plr.get_media_player()
 		else:
 			return self.plr
+
+	def register_event(self, event_type, callback):
+		if self._manager is not None:
+			self._manager.event_attach(event_type, callback)
+		else:
+			self._events_registry[event_type] = callback
 
 	def play(self):
 		self.stop()
@@ -219,8 +229,13 @@ class MediaPlayer(object):
 			self.plr.set_media(media)
 			self.list_player = False
 			# print("playing>")
-		self.plr.play()
 
+		self._manager = self.get_internal_player().event_manager()
+		# apply cached events that were registered before _manager was created
+		for evt, cb in self._events_registry.items():
+			self.register_event(evt, cb)
+		self._events_registry = {}
+		self.plr.play()
 
 	def is_playing(self):
 		return self.plr is not None and self.plr.is_playing()
@@ -230,24 +245,24 @@ class MediaPlayer(object):
 
 	def stop(self):
 		if self.plr is not None:
-			self.plr.stop()
+			if not self.plr.get_state() in (vlc.State.Ended, vlc.State.Stopped):
+				self.plr.stop()
 			self.plr.release()
 			self.plr = None
 		if self.inst is not None:
 			self.inst.release()
 			self.inst = None
-
+		self._manager = None
 
 	def forward(self):
 		"""Go forward one sec"""
-		player = self.get_vlc_player()
+		player = self.get_internal_player()
 		player.set_time(player.get_time() + 10000)
 
 	def rewind(self):
 		"""Go back one sec"""
-		player = self.get_vlc_player()
+		player = self.get_internal_player()
 		player.set_time(player.get_time() - 10000)
-
 
 	def toggle_pause(self, pause=True):
 		self.plr.set_pause(1 if pause else 0)
@@ -270,29 +285,29 @@ class Station(object):
 
 	def play(self):
 		if self.mrl is not None:
-			MediaPlayer.get_player(self.mrl).play()
+			VLCPlayer.get_player(self.mrl).play()
 
 	def toggle_pause(self, pause=True):
 		if self.mrl is not None:
-			return MediaPlayer.get_player(self.mrl).toggle_pause(pause=pause)
+			return VLCPlayer.get_player(self.mrl).toggle_pause(pause=pause)
 
 	def stop(self):
 		if self.mrl is not None:
-			MediaPlayer.get_player(self.mrl).stop()
+			VLCPlayer.get_player(self.mrl).stop()
 
 	def is_playing(self):
-		return self.mrl is not None and MediaPlayer.get_player(self.mrl).is_playing()
+		return self.mrl is not None and VLCPlayer.get_player(self.mrl).is_playing()
 
 	def is_paused(self):
-		return self.mrl is not None and MediaPlayer.get_player(self.mrl).is_paused()
+		return self.mrl is not None and VLCPlayer.get_player(self.mrl).is_paused()
 
 	def forward(self):
 		if self.mrl is not None:
-			MediaPlayer.get_player(self.mrl).forward()
+			VLCPlayer.get_player(self.mrl).forward()
 
 	def rewind(self):
 		if self.mrl is not None:
-			MediaPlayer.get_player(self.mrl).forward()
+			VLCPlayer.get_player(self.mrl).forward()
 
 	def info(self):
 		return {'mrl': self.mrl, 'id': self.id}
@@ -338,8 +353,7 @@ class RadioStation(Station):
 		if self.mrl is None:
 			raise Exception("Stream not available for {}".format(self))
 		print("\nPlaying {} - {} at {} : {}".format(self.name, self.description, self.frequency, self.mrl))
-		MediaPlayer.get_player(self.mrl).play()
-
+		VLCPlayer.get_player(self.mrl).play()
 
 	def toggle_pause(self, pause=True):
 		if pause and self.is_playing():
@@ -392,7 +406,6 @@ class Track(object):
 
 
 
-
 class ArtistStation(Station):
 	def __init__(self, artist_dict, search_term, user_id):
 		self.user_id = user_id
@@ -412,7 +425,6 @@ class ArtistStation(Station):
 		self.tracks = []
 		self.current_track = None
 		self.player_thread = None
-		self.stopped = False
 
 	def __str__(self):
 		return "<artist:{}:{}>".format(self.name, self.id)
@@ -427,67 +439,24 @@ class ArtistStation(Station):
 	def get_current_track(self):
 		return self.current_track
 
+	def _print_remaining_duration(self, event):
+		remaining = int((1-event.u.new_position) * self.current_track.length)
+		m = remaining // 60
+		s = (remaining % 60)
+		sys.stdout.write(f"\r{m:02d}:{s:02d}")
+
+	def _play_next(self, event, track_generator):
+		self.current_track = next(track_generator)
+		self.mrl = self.current_track.mrl
+		print("\r"+str(self.current_track))
+		player = VLCPlayer.get_player(self.mrl)
+		_next_player = lambda next_event: self._play_next(event=next_event, track_generator=track_generator)
+		player.register_event(player.END_REACHED, _next_player)
+		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
+		player.play()
 
 	def play(self):
-
-		def _play():
-			for self.current_track in self._track_gen():
-				self.stopped = False
-				self.mrl = self.current_track.mrl
-				print("\r"+str(self.current_track))
-				player = MediaPlayer.get_player(self.mrl)
-				try:
-					player.play()
-					time.sleep(1)
-					m = self.current_track.length // 60
-					s = (self.current_track.length % 60) - 1
-					# sys.stdout.write("\033[?25l")
-					print('\rplaying =', player.is_playing(), "paused =", player.is_paused())
-					while player.is_playing() or player.is_paused():
-						while player.is_paused():
-							time.sleep(0.2)
-
-						s = (s-1)%60
-						if s==0:
-							m-=1
-						seconds = s if m>=0 else 0
-						minutes = max(m, 0)
-						sys.stdout.write("\r{:02d}:{:02d}".format(minutes, seconds))
-						time.sleep(1)
-				except:
-					traceback.print_exc()
-					print("HOOO--------")
-				finally:
-					# sys.stdout.write("\033[?25h")
-					player.stop()
-					self.mrl = None
-					if self.stopped:
-						return None
-
-		self.player_thread = threading.Thread(target=_play)
-		self.player_thread.daemon = True
-		self.player_thread.start()
-
-
-	def wait(self):
-		try:
-			while self.player_thread.is_alive():
-				self.player_thread.join(0.5)
-		finally:
-			# sys.stdout.write("\033[?25h\n")
-			sys.stdout.write("\n")
-			MediaPlayer.get_player(self.current_track.mrl).stop()
-
-
-	def is_playing(self):
-		return self.current_track is not None \
-			and self.player_thread is not None \
-			and self.player_thread.is_alive() \
-			and MediaPlayer.get_player(self.current_track.mrl).is_playing()
-
-	def stop(self):
-		self.stopped = True
-		super().stop()
+		self._play_next(event=None, track_generator=self._track_gen())
 
 	def info(self):
 		try:
@@ -495,9 +464,10 @@ class ArtistStation(Station):
 		except Exception as e:
 			print(e)
 
-
 	def forward(self):
-		super().stop()
+		player = VLCPlayer.get_player(self.mrl).get_internal_player()
+		player.set_time(player.get_length())
+
 
 
 
@@ -514,11 +484,9 @@ class iHeart(object):
 	TALKSHOWS = "talkShows"
 	TALKTHEMES = "talkThemes"
 
-
 	def __init__(self, uuid_store=UUID_STORE):
 		self.user = ilogin(uuid_store=uuid_store)
 		self.user_id = self.user['profileId']
-
 
 	def search(self, keyword, category=None):
 		if category is None: category = self.ARTISTS
@@ -558,7 +526,6 @@ def test_artist_radio():
 	artists[0].play()
 	time.sleep(10)
 	artists[0].stop()
-	artists[0].wait()
 
 
 
