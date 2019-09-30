@@ -461,13 +461,16 @@ class Track(object):
 		self.id = content['id']
 		self.name = content.get('title')
 		self.version = content.get('version')
-		self.length = content.get('duration')
 		self.artist = content.get('artistName')
 		self.artist_id = content.get('artistId')
 		self.album = content.get('albumName')
 		self.album_id = content.get('albumId')
 		self.lyrics_id = content.get('lyricsId')
 		self.imageUrl = content.get('imagePath')
+
+		self.length = content.get('duration')
+		self.minutes = self.length // 60
+		self.seconds = self.length % 60
 
 	def __str__(self):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
@@ -476,7 +479,7 @@ class Track(object):
 			Colors.colorize(self.album, Colors.GREEN, bold=True)
 		)
 		if self.version:
-			s += " [" + Colors.colorize(self.artist, Colors.RED, bold=True) + "]"
+			s += " [" + Colors.colorize(self.version, Colors.RED, bold=True) + "]"
 		return s
 
 	def __repr__(self):
@@ -527,7 +530,8 @@ class ArtistStation(Station):
 		remaining = int((1-event.u.new_position) * self.current_track.length)
 		m = remaining // 60
 		s = (remaining % 60)
-		sys.stdout.write(f"{m:02d}:{s:02d}\r")
+		countdown = f"\t-{m:02d}:{s:02d}/{self.current_track.minutes:02d}:{self.current_track.seconds:02d}\r"
+		sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def _play_next(self, event, track_generator):
 		self.current_track = next(track_generator)
