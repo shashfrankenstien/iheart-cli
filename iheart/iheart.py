@@ -6,6 +6,9 @@ import json
 import time
 import logging
 import traceback
+import random
+
+printjson = lambda j: print(json.dumps(j, indent=4))
 
 # Install VLC on windows
 # certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
@@ -21,7 +24,6 @@ station_stream_url = 'https://us.api.iheart.com/api/v2/content/liveStations/{str
 meta_url = 'https://us.api.iheart.com/api/v3/live-meta/stream/{stream_id}/currentTrackMeta'
 
 
-
 artist_url = 'https://us.api.iheart.com/api/v1/catalog/getArtistByArtistId?artistId={artist_id}' #GET
 artist_profile_url = 'https://us.api.iheart.com/api/v3/artists/profiles/{artist_id}' #GET
 similar_artists_url = 'https://us.api.iheart.com/api/v1/catalog/artist/{artist_id}/getSimilar' #GET
@@ -29,12 +31,6 @@ artist_albums_url = 'https://us.api.iheart.com/api/v3/catalog/artist/{artist_id}
 
 artist_playlist_url = 'https://us.api.iheart.com/api/v2/playlists/{user_id}/ARTIST/{artist_id}' #POST formData = {'contentId':artist_id, 'playedFrom':10}
 artist_stream_url = 'https://us.api.iheart.com/api/v2/playback/streams' # Takes steramId in POST params
-# contentIds	[]
-# hostName	webapp.US
-# playedFrom	10
-# stationId	5d82d62497758a0001bfffc3
-# stationType	RADIO
-
 
 
 #TODO tracks
@@ -62,7 +58,76 @@ UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 
 
-printjson = lambda j: print(json.dumps(j, indent=4))
+# echo -e "Default \e[35mMagenta"
+
+# 	Default Magenta
+# 36 	Cyan
+
+# echo -e "Default \e[36mCyan"
+
+# 	Default Cyan
+# 37 	Light gray
+
+# echo -e "Default \e[37mLight gray"
+
+# 	Default Light gray
+# 90 	Dark gray
+
+# echo -e "Default \e[90mDark gray"
+
+# 	Default Dark gray
+# 91 	Light red
+
+# echo -e "Default \e[91mLight red"
+
+# 	Default Light red
+# 92 	Light green
+
+# echo -e "Default \e[92mLight green"
+
+# 	Default Light green
+# 93 	Light yellow
+
+# echo -e "Default \e[93mLight yellow"
+
+# 	Default Light yellow
+# 94 	Light blue
+
+# echo -e "Default \e[94mLight blue"
+
+# 	Default Light blue
+# 95 	Light magenta
+
+# echo -e "Default \e[95mLight magenta"
+
+# 	Default Light magenta
+# 96 	Light cyan
+
+# echo -e "Default \e[96mLight cyan"
+
+# 	Default Light cyan
+# 97 	White
+
+# echo -e "Default \e[97mWhite"
+class Colors(object):
+	RED = 31
+	GREEN = 32
+	YELLOW = 93#33
+	BLUE = 34
+	PINK = 35
+	LIGHT_BLUE = 36
+	WHITE = 37
+	GRAY = 90
+	CYAN = 96
+
+	@staticmethod
+	def colorize(message, color, bold=False):
+		if isinstance(color, list):
+			color = random.choice(color)
+		color_code = '{};{}'.format(1 if bold else 0, color)
+		# return "\u001b[{}m".format(color_code)+message+"\u001b[0m"
+		return "\033[{}m".format(color_code)+message+"\033[0m"
+
 
 def generic_get(url):
 	res = requests.get(url, headers=HEADERS)
@@ -326,13 +391,18 @@ class RadioStation(Station):
 		self.callLetters = station_dict.get('callLetters')
 		self.frequency = station_dict.get('frequency')
 		self.imageUrl = station_dict.get('imageUrl')
-		# self.mrl = None
 
 		self.search_term = search_term
 		self.search_score = station_dict.get('score')
 
 	def __str__(self):
-		return "<station:{}:{}>".format(self.name, self.description)
+		decor = Colors.colorize("**", Colors.RED)
+		return "{} LiveStation: {}:{} {}".format(
+			decor,
+			Colors.colorize(self.name, Colors.CYAN, bold=True),
+			Colors.colorize(self.description, Colors.BLUE, bold=True),
+			decor
+		)
 
 	def parse_stream(self):
 		self.streams = iget_station_streams(self.id)
@@ -352,8 +422,15 @@ class RadioStation(Station):
 		self.parse_stream()
 		if self.mrl is None:
 			raise Exception("Stream not available for {}".format(self))
-		print("\nPlaying {} - {} at {} : {}".format(self.name, self.description, self.frequency, self.mrl))
-		VLCPlayer.get_player(self.mrl).play()
+		print('Radio: "{}" - "{}" at "{}" {}'.format(
+			Colors.colorize(self.name, Colors.YELLOW, bold=True),
+			Colors.colorize(self.description, Colors.PINK, bold=True),
+			Colors.colorize(str(self.frequency)+"Hz", Colors.GREEN, bold=True),
+			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False)
+		))
+		player = VLCPlayer.get_player(self.mrl)
+		# player.register_event(player.POSITION_CHANGED, lambda e: sys.stdout.write(str(e.u.new_time)+"\r"+))
+		player.play()
 
 	def toggle_pause(self, pause=True):
 		if pause and self.is_playing():
@@ -369,8 +446,6 @@ class RadioStation(Station):
 			return iget_live_meta(self.id)
 		except Exception as e:
 			print(e)
-
-
 
 
 
@@ -395,10 +470,13 @@ class Track(object):
 		self.imageUrl = content.get('imagePath')
 
 	def __str__(self):
-		s = '''<Track: "{}" by "{}" on "{}"'''.format(self.name, self.artist, self.artist)
+		s = '''Track: "{}" by "{}" on "{}"'''.format(
+			Colors.colorize(self.name, Colors.YELLOW, bold=True),
+			Colors.colorize(self.artist, Colors.PINK, bold=True),
+			Colors.colorize(self.album, Colors.GREEN, bold=True)
+		)
 		if self.version:
-			s += " [" + self.version + "]"
-		s += ">"
+			s += " [" + Colors.colorize(self.artist, Colors.RED, bold=True) + "]"
 		return s
 
 	def __repr__(self):
@@ -427,7 +505,13 @@ class ArtistStation(Station):
 		self.player_thread = None
 
 	def __str__(self):
-		return "<artist:{}:{}>".format(self.name, self.id)
+		decor = Colors.colorize("**", Colors.RED)
+		return "{} ArtistStation: {}:{} {}".format(
+			decor,
+			Colors.colorize(self.name, Colors.CYAN, bold=True),
+			Colors.colorize(str(self.id), Colors.BLUE, bold=True),
+			decor
+		)
 
 	def _track_gen(self):
 		while True:
@@ -443,12 +527,13 @@ class ArtistStation(Station):
 		remaining = int((1-event.u.new_position) * self.current_track.length)
 		m = remaining // 60
 		s = (remaining % 60)
-		sys.stdout.write(f"\r{m:02d}:{s:02d}")
+		sys.stdout.write(f"{m:02d}:{s:02d}\r")
 
 	def _play_next(self, event, track_generator):
 		self.current_track = next(track_generator)
 		self.mrl = self.current_track.mrl
-		print("\r"+str(self.current_track))
+		print(Colors.colorize(self.mrl, Colors.GRAY))
+		print(str(self.current_track))
 		player = VLCPlayer.get_player(self.mrl)
 		_next_player = lambda next_event: self._play_next(event=next_event, track_generator=track_generator)
 		player.register_event(player.END_REACHED, _next_player)
@@ -500,20 +585,23 @@ class iHeart(object):
 
 
 
+def test_player():
+	url = 'http://custom-hls.iheart.com/bell-ingestion-pipeline-production-umg/encodes/Dec18/121218/full/00602537937011_20181206002655653/00602537937011_T55_audtrk.m4a.m3u8?null'
+	player = VLCPlayer.get_player(url)
+	player.play()
+	print('''<Track: "Bad Medicine" by "Bon Jovi" on "Bon Jovi">''')
+	time.sleep(25)
+	player.stop()
+
+
 def test_stations():
 	radio = iHeart()
 	res = radio.search("Classic Rock", category=iHeart.STATIONS)
-	# res[2].play()
-	# time.sleep(5)
-	# print(res[2].is_playing())
-	# time.sleep(5)
-	# res[2].stop()
-	for station in res[:4]:
+	for station in res[:2]:
 		station.play()
 		time.sleep(10)
 		station.stop()
 		time.sleep(2)
-
 
 
 def test_artist_radio():
@@ -530,4 +618,4 @@ def test_artist_radio():
 
 
 if __name__ == "__main__":
-	test_artist_radio()
+	test_player()
