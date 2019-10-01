@@ -2,13 +2,11 @@ import os, sys
 import requests
 import uuid
 import vlc
-import json
 import time
 import logging
 import traceback
 import random
 
-printjson = lambda j: print(json.dumps(j, indent=4))
 
 # Install VLC on windows
 # certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
@@ -33,7 +31,7 @@ artist_playlist_url = 'https://us.api.iheart.com/api/v2/playlists/{user_id}/ARTI
 artist_stream_url = 'https://us.api.iheart.com/api/v2/playback/streams' # Takes steramId in POST params
 
 
-#TODO tracks
+#NOTE useful track info - No stream available
 track_url = 'https://us.api.iheart.com/api/v1/catalog/getTrackByTrackId?trackId={track_id}' #GET
 track2_url = 'https://us.api.iheart.com/api/v3/catalog/tracks/{track_id}' #GET
 
@@ -57,58 +55,6 @@ CWD = os.path.dirname(os.path.realpath(__file__))
 UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 
-
-# echo -e "Default \e[35mMagenta"
-
-# 	Default Magenta
-# 36 	Cyan
-
-# echo -e "Default \e[36mCyan"
-
-# 	Default Cyan
-# 37 	Light gray
-
-# echo -e "Default \e[37mLight gray"
-
-# 	Default Light gray
-# 90 	Dark gray
-
-# echo -e "Default \e[90mDark gray"
-
-# 	Default Dark gray
-# 91 	Light red
-
-# echo -e "Default \e[91mLight red"
-
-# 	Default Light red
-# 92 	Light green
-
-# echo -e "Default \e[92mLight green"
-
-# 	Default Light green
-# 93 	Light yellow
-
-# echo -e "Default \e[93mLight yellow"
-
-# 	Default Light yellow
-# 94 	Light blue
-
-# echo -e "Default \e[94mLight blue"
-
-# 	Default Light blue
-# 95 	Light magenta
-
-# echo -e "Default \e[95mLight magenta"
-
-# 	Default Light magenta
-# 96 	Light cyan
-
-# echo -e "Default \e[96mLight cyan"
-
-# 	Default Light cyan
-# 97 	White
-
-# echo -e "Default \e[97mWhite"
 class Colors(object):
 	RED = 31
 	GREEN = 32
@@ -234,6 +180,11 @@ def iget_artist_streams(astream_id):
 		return res.json().get('items') or []
 	except:
 		raise Exception(res.text)
+
+
+def iget_track_info(track_id):
+	return generic_get(track_url.format(track_id=track_id))
+
 
 # **************************************************************************************
 # ********************************** Player Classes ************************************
@@ -377,7 +328,8 @@ class Station(object):
 	def info(self):
 		return {'mrl': self.mrl, 'id': self.id}
 
-
+	def show_time(self, show=True):
+		pass
 
 
 class RadioStation(Station):
@@ -404,7 +356,7 @@ class RadioStation(Station):
 			decor
 		)
 
-	def parse_stream(self):
+	def _parse_stream(self):
 		self.streams = iget_station_streams(self.id)
 		if 'hls_stream' in self.streams:
 			self.mrl = self.streams['hls_stream'].strip()
@@ -419,13 +371,13 @@ class RadioStation(Station):
 				print(e)
 
 	def play(self):
-		self.parse_stream()
+		self._parse_stream()
 		if self.mrl is None:
 			raise Exception("Stream not available for {}".format(self))
 		print('Radio: "{}" - "{}" at "{}" {}'.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
 			Colors.colorize(self.description, Colors.PINK, bold=True),
-			Colors.colorize(str(self.frequency)+"Hz", Colors.GREEN, bold=True),
+			Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
 			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False)
 		))
 		player = VLCPlayer.get_player(self.mrl)
@@ -452,7 +404,6 @@ class RadioStation(Station):
 
 class Track(object):
 	def  __init__(self, track_dict):
-		# printjson(track_dict)
 		if 'streamUrl' not in track_dict:
 			raise Exception("station id not found")
 		self.mrl = track_dict['streamUrl'].replace("https", 'http')
@@ -505,7 +456,7 @@ class ArtistStation(Station):
 		self.station_hash = None
 		self.tracks = []
 		self.current_track = None
-		self.player_thread = None
+		self._show_time = True
 
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
@@ -526,18 +477,22 @@ class ArtistStation(Station):
 	def get_current_track(self):
 		return self.current_track
 
+	def show_time(self, show=True):
+		self._show_time = show
+
 	def _print_remaining_duration(self, event):
-		remaining = int((1-event.u.new_position) * self.current_track.length)
-		m = remaining // 60
-		s = (remaining % 60)
-		countdown = f"\t-{m:02d}:{s:02d}/{self.current_track.minutes:02d}:{self.current_track.seconds:02d}\r"
-		sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
+		if self._show_time:
+			remaining = int((1-event.u.new_position) * self.current_track.length)
+			m = remaining // 60
+			s = (remaining % 60)
+			countdown = f"\t-{m:02d}:{s:02d}/{self.current_track.minutes:02d}:{self.current_track.seconds:02d}\r"
+			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def _play_next(self, event, track_generator):
 		self.current_track = next(track_generator)
 		self.mrl = self.current_track.mrl
-		print(Colors.colorize(self.mrl, Colors.GRAY))
-		print(str(self.current_track))
+		sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
+		sys.stdout.write(str(self.current_track) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
 		_next_player = lambda next_event: self._play_next(event=next_event, track_generator=track_generator)
 		player.register_event(player.END_REACHED, _next_player)
