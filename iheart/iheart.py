@@ -299,6 +299,9 @@ class Station(object):
 	def __str__(self):
 		return "<station:{}:{}>".format(self.id, self.mrl)
 
+	def __repr__(self):
+		return str(self)
+
 	def play(self):
 		if self.mrl is not None:
 			VLCPlayer.get_player(self.mrl).play()
@@ -332,20 +335,23 @@ class Station(object):
 		pass
 
 
+
+
 class RadioStation(Station):
 	def __init__(self, station_dict, search_term):
-		if 'id' not in station_dict:
+		self._station_dict = station_dict
+		if 'id' not in self._station_dict:
 			raise Exception("station id not found")
-		super(RadioStation, self).__init__(station_id=station_dict['id'])
+		super().__init__(station_id=self._station_dict['id'])
 		# self.id = station_dict['id']
-		self.name = station_dict.get('name')
-		self.description = (station_dict.get('description') or '').strip()
-		self.callLetters = station_dict.get('callLetters')
-		self.frequency = station_dict.get('frequency')
-		self.imageUrl = station_dict.get('imageUrl')
+		self.name = self._station_dict.get('name')
+		self.description = (self._station_dict.get('description') or '').strip()
+		self.callLetters = self._station_dict.get('callLetters')
+		self.frequency = self._station_dict.get('frequency')
+		self.imageUrl = self._station_dict.get('imageUrl')
 
 		self.search_term = search_term
-		self.search_score = station_dict.get('score')
+		self.search_score = self._station_dict.get('score')
 
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
@@ -406,6 +412,7 @@ class Track(object):
 	def  __init__(self, track_dict):
 		if 'streamUrl' not in track_dict:
 			raise Exception("station id not found")
+		self._track_dict = track_dict
 		self.mrl = track_dict['streamUrl'].replace("https", 'http')
 
 		content = track_dict['content']
@@ -423,6 +430,8 @@ class Track(object):
 		self.minutes = self.length // 60
 		self.seconds = self.length % 60
 
+		self.__show_time = True
+
 	def __str__(self):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
@@ -433,8 +442,31 @@ class Track(object):
 			s += " [" + Colors.colorize(self.version, Colors.RED, bold=True) + "]"
 		return s
 
+	def to_dict(self):
+		return self._track_dict
+
 	def __repr__(self):
 		return str(self)
+
+	def show_time(self, show=True):
+		self.__show_time = show
+
+	def _print_remaining_duration(self, event):
+		if self.__show_time:
+			remaining = int((1-event.u.new_position) * self.length)
+			m = remaining // 60
+			s = (remaining % 60)
+			countdown = f"\t-{m:02d}:{s:02d}/{self.minutes:02d}:{self.seconds:02d}\r"
+			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
+
+	def play(self, on_complete):
+		sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
+		sys.stdout.write(str(self) + "\n\r")
+		player = VLCPlayer.get_player(self.mrl)
+		player.register_event(player.END_REACHED, on_complete)
+		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
+		player.play()
+
 
 
 
@@ -444,7 +476,7 @@ class ArtistStation(Station):
 		self._artist_dict = artist_dict
 		if 'id' not in self._artist_dict:
 			raise Exception("station id not found")
-		super(ArtistStation, self).__init__(station_id=self._artist_dict['id'])
+		super().__init__(station_id=self._artist_dict['id'])
 
 		self.name = self._artist_dict.get('name')
 		self.imageUrl = self._artist_dict.get('image')
@@ -454,9 +486,7 @@ class ArtistStation(Station):
 		self.rank = self._artist_dict.get('rank')
 
 		self.station_hash = None
-		self.tracks = []
 		self.current_track = None
-		self._show_time = True
 
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
@@ -471,33 +501,20 @@ class ArtistStation(Station):
 		while True:
 			station_data = iget_artist_station(self.user_id, self.id)
 			self.station_hash = station_data['id']
-			for strm in iget_artist_streams(station_data['id']):
-				yield Track(strm)
+			for trk_dict in iget_artist_streams(self.station_hash):
+				yield Track(trk_dict)
 
 	def get_current_track(self):
 		return self.current_track
 
 	def show_time(self, show=True):
-		self._show_time = show
-
-	def _print_remaining_duration(self, event):
-		if self._show_time:
-			remaining = int((1-event.u.new_position) * self.current_track.length)
-			m = remaining // 60
-			s = (remaining % 60)
-			countdown = f"\t-{m:02d}:{s:02d}/{self.current_track.minutes:02d}:{self.current_track.seconds:02d}\r"
-			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
+		self.current_track.show_time(show)
 
 	def _play_next(self, event, track_generator):
 		self.current_track = next(track_generator)
 		self.mrl = self.current_track.mrl
-		sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
-		sys.stdout.write(str(self.current_track) + "\n\r")
-		player = VLCPlayer.get_player(self.mrl)
 		_next_player = lambda next_event: self._play_next(event=next_event, track_generator=track_generator)
-		player.register_event(player.END_REACHED, _next_player)
-		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
-		player.play()
+		self.current_track.play(on_complete=_next_player)
 
 	def play(self):
 		self._play_next(event=None, track_generator=self._track_gen())
@@ -509,8 +526,25 @@ class ArtistStation(Station):
 			print(e)
 
 	def forward(self):
-		player = VLCPlayer.get_player(self.mrl).get_internal_player()
-		player.set_time(player.get_length())
+		vlc_player = VLCPlayer.get_player(self.mrl).get_internal_player()
+		vlc_player.set_time(vlc_player.get_length())
+
+
+
+
+class Playlist(ArtistStation):
+
+	def __init__(self, track_list, name):
+		super().__init__({'id':name, 'name':name}, search_term=None, user_id=None)
+		self.track_list = track_list
+
+	def __str__(self):
+		return "<Playlist :{}>".format(self.id)
+
+	def _track_gen(self):
+		while True:
+			for trk_dict in self.track_list:
+				yield Track(trk_dict)
 
 
 
@@ -564,17 +598,16 @@ def test_stations():
 
 
 def test_artist_radio():
-	if len(sys.argv) > 1:
-		artist_keyword = sys.argv[1].strip()
-	else:
-		artist_keyword = input("Search for artist: ")
+	artist_keyword = "Queen" # = input("Search for artist: ")
 	radio = iHeart()
-	artists = radio.search(artist_keyword, category=iHeart.ARTISTS)
-	artists[0].play()
+	artist = radio.search(artist_keyword, category=iHeart.ARTISTS)[0]
+	artist.play()
+	import json
 	time.sleep(10)
-	artists[0].stop()
+	artist.stop()
+	print(json.dumps({'a': artist.get_current_track().to_dict()}))
 
 
 
 if __name__ == "__main__":
-	test_player()
+	test_artist_radio()

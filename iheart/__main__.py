@@ -4,6 +4,8 @@ from collections import OrderedDict
 import json
 
 from iheart import iHeart
+from iheart import ArtistStation, RadioStation, Station
+from iheart import Track
 
 
 try:
@@ -25,13 +27,64 @@ except ImportError:
 printjson = lambda j: print(json.dumps(j, indent=4))
 wipeline = lambda:sys.stdout.write("\33[2K\r")
 
+
+
+class iHeart_Storage(object):
+
+	DATA = {
+		'last_station': None,
+	}
+
+	def __init__(self, configdir):
+		self.configdir = configdir
+
+	@staticmethod
+	def station_to_dict(station):
+		d = {}
+		if isinstance(station, ArtistStation):
+			d = {
+				'station_data': station._artist_dict,
+				'search_term': station.search_term,
+				'user_id': station.user_id,
+				'__name__': ArtistStation.__name__
+			}
+		elif isinstance(station, RadioStation):
+			d = {
+				'station_data': station._station_dict,
+				'search_term': station.search_term,
+				'__name__': RadioStation.__name__
+			}
+		elif isinstance(station, Station):
+			d = {
+				'id': station.id,
+				'mrl': station.mrl,
+				'__name__': Station.__name__
+			}
+		else:
+			raise Exception("Not a Track/Station")
+		return d
+
+	@staticmethod
+	def station_from_dict(self, d):
+		if '__name__' not in d:
+			raise Exception("Not a Track/Station dict")
+		elif d['__name__']==ArtistStation.__name__:
+			return ArtistStation(d['station_data'], d['search_term'], d['user_id'])
+		elif d['__name__']==RadioStation.__name__:
+			return RadioStation(d['station_data'], d['search_term'])
+		elif d['__name__']==Station.__name__:
+			return Station(d['id'], d['mrl'])
+		else:
+			raise Exception("Not a Track/Station dict")
+
+# TODO
+# def current_track_to_dict(self, track):
+# 	if isinstance(track, )
+
 class ExitException(Exception):
 	pass
 
-
-
-
-class iheart_cli(iHeart):
+class iHeart_CLI(iHeart):
 
 	CATEGORIES = {
 		"Live Radio": iHeart.STATIONS,
@@ -48,14 +101,15 @@ class iheart_cli(iHeart):
 		'q': 'exit',
 	})
 
+
 	def __init__(self, configdir, category=None, debug=False):
-		self.configdir = configdir
-		uuid_file = os.path.join(self.configdir, "iheart-cli.uuid")
+		uuid_file = os.path.join(configdir, "iheart-cli.uuid")
 		super().__init__(uuid_store=uuid_file)
-		self._debug = debug
+		self.store = iHeart_Storage(configdir=configdir)
 		self._category = category or iHeart.ARTISTS
 		self.station_list = []
 		self.station = None
+		self._debug = debug
 
 	def print_help(self):
 		wipeline()
@@ -184,7 +238,7 @@ def main():
 	if not os.path.isdir(configdir): os.makedirs(configdir)
 
 	try:
-		radio = iheart_cli(configdir)
+		radio = iHeart_CLI(configdir)
 		radio.choose_category()
 		radio.run_cli(search_term)
 	except KeyboardInterrupt:
