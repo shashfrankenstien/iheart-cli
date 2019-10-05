@@ -1,12 +1,11 @@
 import os, sys
-import requests
-import uuid
 import vlc
 import time
 import logging
 import traceback
 import random
-
+import requests
+import uuid
 
 # Install VLC on windows
 # certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
@@ -51,6 +50,11 @@ HEADERS = {
 	"Connection": "keep-alive"
 }
 
+
+
+
+
+
 CWD = os.path.dirname(os.path.realpath(__file__))
 UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
@@ -75,12 +79,13 @@ class Colors(object):
 		return "\033[{}m".format(color_code)+message+"\033[0m"
 
 
-def generic_get(url):
+def _generic_get(url):
 	res = requests.get(url, headers=HEADERS)
 	try:
 		return res.json()
 	except:
 		raise Exception(res.text)
+
 
 # **************************************************************************************
 # ********************************** API Functions *************************************
@@ -146,15 +151,14 @@ def iget_station_streams(stream_id):
 		raise Exception(str(res))
 
 def iget_live_meta(stream_id):
-	return generic_get(meta_url.format(stream_id=stream_id))
-
+	return _generic_get(meta_url.format(stream_id=stream_id))
 
 
 def iget_artist_profile(artist_id):
-	return generic_get(artist_profile_url.format(artist_id=artist_id))
+	return _generic_get(artist_profile_url.format(artist_id=artist_id))
 
 def iget_artist_bio(artist_id):
-	return generic_get(artist_url.format(artist_id=artist_id))
+	return _generic_get(artist_url.format(artist_id=artist_id))
 
 
 def iget_artist_station(user_id, artist_id):
@@ -183,7 +187,8 @@ def iget_artist_streams(astream_id):
 
 
 def iget_track_info(track_id):
-	return generic_get(track_url.format(track_id=track_id))
+	return _generic_get(track_url.format(track_id=track_id))
+
 
 
 # **************************************************************************************
@@ -289,12 +294,18 @@ class VLCPlayer(object):
 
 
 
-
 class Station(object):
 
-	def __init__(self, station_id, mrl=None):
-		self.id = station_id
-		self.mrl = mrl
+	def __init__(self, station_dict):
+		self.__dict = station_dict
+		if 'id' not in self.__dict:
+			raise Exception("station id not found")
+		self.id = self.__dict['id']
+		self.user_id = self.__dict['user_id']
+		self.mrl = self.__dict.get('mrl', None)
+
+	def get_dict(self):
+		return self.__dict
 
 	def __str__(self):
 		return "<station:{}:{}>".format(self.id, self.mrl)
@@ -337,26 +348,27 @@ class Station(object):
 
 
 
-class RadioStation(Station):
-	def __init__(self, station_dict, search_term):
-		self._station_dict = station_dict
-		if 'id' not in self._station_dict:
-			raise Exception("station id not found")
-		super().__init__(station_id=self._station_dict['id'])
+class LiveStation(Station):
+	def __init__(self, station_dict):
+		super().__init__(station_dict=station_dict)
+		self.__dict = station_dict
 		# self.id = station_dict['id']
-		self.name = self._station_dict.get('name')
-		self.description = (self._station_dict.get('description') or '').strip()
-		self.callLetters = self._station_dict.get('callLetters')
-		self.frequency = self._station_dict.get('frequency')
-		self.imageUrl = self._station_dict.get('imageUrl')
+		self.name = self.__dict.get('name')
+		self.description = (self.__dict.get('description') or '').strip()
+		self.callLetters = self.__dict.get('callLetters')
+		self.frequency = self.__dict.get('frequency')
+		self.imageUrl = self.__dict.get('imageUrl')
 
-		self.search_term = search_term
-		self.search_score = self._station_dict.get('score')
+		self.search_score = self.__dict.get('score')
+
+	def get_dict(self):
+		return self.__dict
 
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
-		return "{} LiveStation: {}:{} {}".format(
+		return "{} {}: {} ({}) {}".format(
 			decor,
+			self.__class__.__name__,
 			Colors.colorize(self.name, Colors.CYAN, bold=True),
 			Colors.colorize(self.description, Colors.BLUE, bold=True),
 			decor
@@ -412,7 +424,7 @@ class Track(object):
 	def  __init__(self, track_dict):
 		if 'streamUrl' not in track_dict:
 			raise Exception("station id not found")
-		self._track_dict = track_dict
+		self.__dict = track_dict
 		self.mrl = track_dict['streamUrl'].replace("https", 'http')
 
 		content = track_dict['content']
@@ -432,6 +444,9 @@ class Track(object):
 
 		self.__show_time = True
 
+	def get_dict(self):
+		return self.__dict
+
 	def __str__(self):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
@@ -441,9 +456,6 @@ class Track(object):
 		if self.version:
 			s += " [" + Colors.colorize(self.version, Colors.RED, bold=True) + "]"
 		return s
-
-	def to_dict(self):
-		return self._track_dict
 
 	def __repr__(self):
 		return str(self)
@@ -471,29 +483,28 @@ class Track(object):
 
 
 class ArtistStation(Station):
-	def __init__(self, artist_dict, search_term, user_id):
-		self.user_id = user_id
-		self._artist_dict = artist_dict
-		if 'id' not in self._artist_dict:
-			raise Exception("station id not found")
-		super().__init__(station_id=self._artist_dict['id'])
+	def __init__(self, artist_dict):
+		super().__init__(station_dict=artist_dict)
+		self.__dict = artist_dict
+		self.name = self.__dict.get('name')
+		self.imageUrl = self.__dict.get('image')
 
-		self.name = self._artist_dict.get('name')
-		self.imageUrl = self._artist_dict.get('image')
-
-		self.search_term = search_term
-		self.search_score = self._artist_dict.get('score')
-		self.rank = self._artist_dict.get('rank')
+		self.search_score = self.__dict.get('score')
+		self.rank = self.__dict.get('rank')
 
 		self.station_hash = None
 		self.current_track = None
 
+	def get_dict(self):
+		return self.__dict
+
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
-		return "{} ArtistStation: {}:{} {}".format(
+		return "{} {}: {} ({}) {}".format(
 			decor,
+			self.__class__.__name__,
 			Colors.colorize(self.name, Colors.CYAN, bold=True),
-			Colors.colorize(str(self.id), Colors.BLUE, bold=True),
+			Colors.colorize(str(self.id), Colors.PINK, bold=True),
 			decor
 		)
 
@@ -521,7 +532,7 @@ class ArtistStation(Station):
 
 	def info(self):
 		try:
-			return vars(self.current_track)
+			return self.current_track.get_dict()
 		except Exception as e:
 			print(e)
 
@@ -530,13 +541,30 @@ class ArtistStation(Station):
 		vlc_player.set_time(vlc_player.get_length())
 
 
+class SongStation(ArtistStation):
+
+	def __init__(self, track_dict):
+		# artist = iget_artist_profile(track_dict['artistId'])
+		self.__dict = {
+			'id': track_dict['artistId'],
+			'name': track_dict['title'] + " - " + track_dict['artistName'],
+			'image': track_dict['image'],
+			'user_id': track_dict['user_id'],
+		}
+		super().__init__(artist_dict=self.__dict)
+
 
 
 class Playlist(ArtistStation):
 
-	def __init__(self, track_list, name):
-		super().__init__({'id':name, 'name':name}, search_term=None, user_id=None)
-		self.track_list = track_list
+	def __init__(self, playlist_dict):
+		self.__dict = playlist_dict
+		self.name = playlist_dict['name']
+		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
+		self.track_list = playlist_dict['track_list']
+
+	def get_dict(self):
+		return self.__dict
 
 	def __str__(self):
 		return "<Playlist :{}>".format(self.id)
@@ -569,45 +597,73 @@ class iHeart(object):
 	def search(self, keyword, category=None):
 		if category is None: category = self.ARTISTS
 		search_res = isearch(keyword)
+
 		if category==self.STATIONS:
-			return [RadioStation(res, search_term=keyword) for res in search_res['results'][category]]
+			station_class = LiveStation
 		elif category==self.ARTISTS:
-			return [ArtistStation(res, search_term=keyword, user_id=self.user_id) for res in search_res['results'][category]]
+			station_class = ArtistStation
+		elif category==self.TRACKS:
+			station_class = SongStation
 		else:
 			return search_res['results'][category]
 
-
-
-def test_player():
-	url = 'http://custom-hls.iheart.com/bell-ingestion-pipeline-production-umg/encodes/Dec18/121218/full/00602537937011_20181206002655653/00602537937011_T55_audtrk.m4a.m3u8?null'
-	player = VLCPlayer.get_player(url)
-	player.play()
-	print('''<Track: "Bad Medicine" by "Bon Jovi" on "Bon Jovi">''')
-	time.sleep(25)
-	player.stop()
-
-
-def test_stations():
-	radio = iHeart()
-	res = radio.search("Classic Rock", category=iHeart.STATIONS)
-	for station in res[:2]:
-		station.play()
-		time.sleep(10)
-		station.stop()
-		time.sleep(2)
-
-
-def test_artist_radio():
-	artist_keyword = "Queen" # = input("Search for artist: ")
-	radio = iHeart()
-	artist = radio.search(artist_keyword, category=iHeart.ARTISTS)[0]
-	artist.play()
-	import json
-	time.sleep(10)
-	artist.stop()
-	print(json.dumps({'a': artist.get_current_track().to_dict()}))
+		out = []
+		for result in search_res['results'][category]:
+			result['user_id'] = self.user_id
+			out.append(station_class(result))
+		return out
 
 
 
 if __name__ == "__main__":
+	import json
+	printjson = lambda j: print(json.dumps(j, indent=4))
+
+
+	def test_player():
+		url = 'http://custom-hls.iheart.com/bell-ingestion-pipeline-production-umg/encodes/Dec18/121218/full/00602537937011_20181206002655653/00602537937011_T55_audtrk.m4a.m3u8?null'
+		player = VLCPlayer.get_player(url)
+		player.play()
+		print('''<Track: "Bad Medicine" by "Bon Jovi" on "Bon Jovi">''')
+		time.sleep(25)
+		player.stop()
+
+
+	def test_stations():
+		radio = iHeart()
+		res = radio.search("Classic Rock", category=iHeart.STATIONS)
+		for station in res[:2]:
+			station.play()
+			time.sleep(10)
+			station.stop()
+			time.sleep(2)
+
+
+	def test_artist_radio():
+		artist_keyword = "Queen" # = input("Search for artist: ")
+		radio = iHeart()
+		artist = radio.search(artist_keyword, category=iHeart.ARTISTS)[0]
+		print(artist)
+		printjson(artist.get_dict())
+		# artist.play()
+		# time.sleep(10)
+		# artist.stop()
+		# printjson({'a': artist.get_current_track().get_dict()})
+
+	def test_track_search():
+		track_name = "wild world"
+		radio = iHeart()
+		res1 = radio.search(track_name, category=iHeart.TRACKS)[0]
+		print(res1)
+		printjson(res1.get_dict())
+		# res1.play()
+		# time.sleep(10)
+		# res1.stop()
+		# printjson({'a': res1.get_current_track().get_dict()})
+
+		# printjson(iget_track_info(res1['id']))
+
+
+	test_track_search()
 	test_artist_radio()
+

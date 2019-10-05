@@ -4,7 +4,7 @@ from collections import OrderedDict
 import json
 
 from iheart import iHeart
-from iheart import ArtistStation, RadioStation, Station
+from iheart import ArtistStation, LiveStation, SongStation, Station
 from iheart import Track
 
 
@@ -39,47 +39,33 @@ class iHeart_Storage(object):
 		self.configdir = configdir
 
 	@staticmethod
-	def station_to_dict(station):
-		d = {}
-		if isinstance(station, ArtistStation):
-			d = {
-				'station_data': station._artist_dict,
-				'search_term': station.search_term,
-				'user_id': station.user_id,
-				'__name__': ArtistStation.__name__
-			}
-		elif isinstance(station, RadioStation):
-			d = {
-				'station_data': station._station_dict,
-				'search_term': station.search_term,
-				'__name__': RadioStation.__name__
-			}
-		elif isinstance(station, Station):
-			d = {
-				'id': station.id,
-				'mrl': station.mrl,
-				'__name__': Station.__name__
-			}
-		else:
-			raise Exception("Not a Track/Station")
-		return d
+	def station_to_dict(station_instance):
+		d = station_instance.get_dict()
+		d['__name__'] = station_instance.__class__.__name__
 
 	@staticmethod
 	def station_from_dict(self, d):
 		if '__name__' not in d:
 			raise Exception("Not a Track/Station dict")
 		elif d['__name__']==ArtistStation.__name__:
-			return ArtistStation(d['station_data'], d['search_term'], d['user_id'])
-		elif d['__name__']==RadioStation.__name__:
-			return RadioStation(d['station_data'], d['search_term'])
+			return ArtistStation(d)
+		elif d['__name__']==LiveStation.__name__:
+			return LiveStation(d)
 		elif d['__name__']==Station.__name__:
-			return Station(d['id'], d['mrl'])
+			return Station(d)
 		else:
 			raise Exception("Not a Track/Station dict")
 
-# TODO
-# def current_track_to_dict(self, track):
-# 	if isinstance(track, )
+	def current_track_to_dict(self, station_instance):
+		if isinstance(station_instance, (ArtistStation, SongStation)):
+			track = station_instance.get_current_track()
+			if track:
+				return self.station_to_dict(track)
+			else:
+				return {}
+		else:
+			return self.station_to_dict(station_instance)
+
 
 class ExitException(Exception):
 	pass
@@ -89,6 +75,7 @@ class iHeart_CLI(iHeart):
 	CATEGORIES = {
 		"Live Radio": iHeart.STATIONS,
 		'Artist Radio': iHeart.ARTISTS,
+		'Song Radio': iHeart.TRACKS,
 	}
 
 	CONTROLS = OrderedDict({
@@ -194,7 +181,7 @@ class iHeart_CLI(iHeart):
 					if cmd == 'pause-play':
 						if self.station.is_playing():
 							self.station.toggle_pause(True)
-							print("paused")
+							sys.stdout.write("paused\r")
 						else:
 							self.station.toggle_pause(False)
 
