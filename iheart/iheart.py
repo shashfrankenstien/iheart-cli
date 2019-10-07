@@ -394,7 +394,7 @@ class LiveStation(Station):
 			raise Exception("Stream not available for {}".format(self))
 		print('Radio: "{}" - "{}" at "{}" {}'.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
-			Colors.colorize(self.description, Colors.PINK, bold=True),
+			Colors.colorize(self.description, Colors.BLUE, bold=True),
 			Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
 			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False)
 		))
@@ -423,7 +423,7 @@ class LiveStation(Station):
 class Track(object):
 	def  __init__(self, track_dict):
 		if 'streamUrl' not in track_dict:
-			raise Exception("station id not found")
+			raise Exception("stream not found")
 		self.__dict = track_dict
 		self.mrl = track_dict['streamUrl'].replace("https", 'http')
 
@@ -450,7 +450,7 @@ class Track(object):
 	def __str__(self):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
-			Colors.colorize(self.artist, Colors.PINK, bold=True),
+			Colors.colorize(self.artist, Colors.BLUE, bold=True),
 			Colors.colorize(self.album, Colors.GREEN, bold=True)
 		)
 		if self.version:
@@ -554,25 +554,6 @@ class SongStation(ArtistStation):
 		super().__init__(artist_dict=self.__dict)
 
 
-
-class Playlist(ArtistStation):
-
-	def __init__(self, playlist_dict):
-		self.__dict = playlist_dict
-		self.name = playlist_dict['name']
-		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
-		self.track_list = playlist_dict['track_list']
-
-	def get_dict(self):
-		return self.__dict
-
-	def __str__(self):
-		return "<Playlist :{}>".format(self.id)
-
-	def _track_gen(self):
-		while True:
-			for trk_dict in self.track_list:
-				yield Track(trk_dict)
 
 
 
