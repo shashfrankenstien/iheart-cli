@@ -65,16 +65,17 @@ class iHeart_Storage(object):
 	def __init__(self, configdir):
 		self.configdir = configdir
 		self.data_file = os.path.join(self.configdir, 'iheart-data.json')
-		try:
-			self.DATA = self._load_data()
-		except:
-			pass
+		self.DATA = self._load_data()
 
 	def _load_data(self):
+		default_data = self.DATA.copy()
 		if os.path.isfile(self.data_file):
-			with open(self.data_file, 'r') as conf:
-				data = json.load(conf, object_pairs_hook=OrderedDict)
-				return data
+			try:
+				with open(self.data_file, 'r') as conf:
+					return json.load(conf, object_pairs_hook=OrderedDict)
+			except:
+				pass
+		return default_data
 
 	def station_to_dict(self, station_instance):
 		d = station_instance.get_dict()
@@ -318,7 +319,7 @@ class iHeart_CLI(iHeart):
 
 					elif cmd == 'list-playlist-tracks': # Only for playlist mode
 						print(self.station, "[", end="")
-						print(*["\n\t"+str(t) for t in self.station.track_list])
+						print(*["\n\t{}. {}".format(i+1,t) for i,t in enumerate(self.station.track_list)])
 						print("]")
 
 					elif cmd == 'list-last-search': # No search when in playlists
