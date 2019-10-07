@@ -221,9 +221,10 @@ class iHeart_CLI(iHeart):
 		try:
 			print("Add track to playlist -")
 			pl = self.store.get_playlists()
-			pl_names = ['[New PLaylist]']+list(pl.keys())
+			pl_names = ['* New PLaylist']+list(pl.keys())
 			for i, s in enumerate(pl_names):
-				print("\t", i, ")", s)
+				pl_len_disp = "[{}]".format(len(pl[s])) if s in pl else ''
+				print("\t", i, ")", s, pl_len_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
@@ -245,7 +246,8 @@ class iHeart_CLI(iHeart):
 			pl = self.store.get_playlists()
 			pl_names = list(pl.keys())
 			for i, s in enumerate(pl_names):
-				print("\t", i, ")", s)
+				pl_len_disp = "[{}]".format(len(pl[s])) if s in pl else ''
+				print("\t", i, ")", s, pl_len_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
