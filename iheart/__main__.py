@@ -163,10 +163,10 @@ class ExitException(Exception):
 class iHeart_CLI(iHeart):
 
 	CATEGORIES = OrderedDict({
-		'Artist Radio': iHeart.ARTISTS,
-		'Song Radio': iHeart.TRACKS,
-		"Live Radio": iHeart.STATIONS,
-		'Playlists': iHeart.PLAYLISTS,
+		iHeart.ARTISTS: 'Artist Radio',
+		iHeart.TRACKS: 'Song Radio',
+		iHeart.STATIONS: "Live Radio",
+		iHeart.PLAYLISTS: 'Playlists',
 	})
 
 	ALL_CONTROLS = OrderedDict({
@@ -202,10 +202,11 @@ class iHeart_CLI(iHeart):
 		pl = self.store.get_playlists()
 		playlist_count = len(pl)
 		cats = []
+		cats_actual = list(self.CATEGORIES.keys())
 		for c in self.CATEGORIES:
-			if self.CATEGORIES[c]==iHeart.PLAYLISTS and playlist_count==0:
+			if c==iHeart.PLAYLISTS and playlist_count==0:
 				continue
-			cats.append(c)
+			cats.append(self.CATEGORIES[c])
 
 		for i, s in enumerate(cats):
 			print("\t", i, ")", s)
@@ -214,7 +215,7 @@ class iHeart_CLI(iHeart):
 			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
 				raise Exception("Invalid choice!")
 			else:
-				self._category = self.CATEGORIES[cats[int(choice)]]
+				self._category = cats_actual[int(choice)]
 				# Modifying controls based on choice
 				self.CONTROLS = self.ALL_CONTROLS.copy()
 				if self._category == iHeart.PLAYLISTS:
@@ -230,7 +231,7 @@ class iHeart_CLI(iHeart):
 	def search_stations(self, keyword=None):
 		try:
 			if keyword is None:
-				keyword = input("Search for station: ")
+				keyword = input("Search {}: ".format(self.CATEGORIES[self._category]))
 			if not keyword.strip():
 				raise Exception("No keyword found")
 			self.station_list = self.search(keyword.strip(), category=self._category)
@@ -255,21 +256,29 @@ class iHeart_CLI(iHeart):
 			if self._debug: print(e)
 			return None
 
+
 	def add_to_playlist(self):
 		try:
 			print("Add track to playlist -")
 			pl = self.store.get_playlists()
-			pl_names = ['* New PLaylist']+list(pl.keys())
+			pl_names = list(pl.keys()) + ['( New Playlist )']
 			for i, s in enumerate(pl_names):
-				pl_len_disp = "[{}]".format(len(pl[s])) if s in pl else ''
-				print("\t", i, ")", s, pl_len_disp)
+				plen_disp = ''
+				if s in pl:
+					plen = len(pl[s])
+					plen_comment = "tracks" if plen>1 else "track"
+					plen_disp = "[{} {}]".format(plen, plen_comment)
+				print("\t", i, ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
 				raise Exception("Invalid choice!")
-			elif int(choice)==0:
+			elif int(choice)==len(pl_names)-1:
 				new_pl = input("Name the new playlist: ").strip()
-				self.store.add_to_playlist(playlist_name=new_pl, track=self.station)
+				if new_pl:
+					self.store.add_to_playlist(playlist_name=new_pl, track=self.station)
+				else:
+					if self._debug: print("No playlist name provided!")
 			else:
 				self.store.add_to_playlist(playlist_name=pl_names[int(choice)], track=self.station)
 			self.store.write()
@@ -284,8 +293,12 @@ class iHeart_CLI(iHeart):
 			pl = self.store.get_playlists()
 			pl_names = list(pl.keys())
 			for i, s in enumerate(pl_names):
-				pl_len_disp = "[{}]".format(len(pl[s])) if s in pl else ''
-				print("\t", i, ")", s, pl_len_disp)
+				plen_disp = ''
+				if s in pl:
+					plen = len(pl[s])
+					plen_comment = "tracks" if plen>1 else "track"
+					plen_disp = "[{} {}]".format(plen, plen_comment)
+				print("\t", i, ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
