@@ -54,6 +54,8 @@ class iHeart_Storage(object):
 		'playlists': {},
 	}
 
+	CONFIG = {}
+
 	_STATION_CLASS_MAP = {
 		ArtistStation.__name__: ArtistStation,
 		LiveStation.__name__: LiveStation,
@@ -62,20 +64,58 @@ class iHeart_Storage(object):
 		Playlist.__name__: Playlist
 	}
 
-	def __init__(self, configdir):
+	def __init__(self, configdir, debug=False):
+		self._debug = debug
 		self.configdir = configdir
-		self.data_file = os.path.join(self.configdir, 'iheart-data.json')
+		self.CONFIG = self._load_config()
 		self.DATA = self._load_data()
+
+	def _load_config(self):
+		if not os.path.isdir(self.configdir): os.makedirs(self.configdir)
+		temp_conf = {
+			'last-played-file': os.path.join(self.configdir, 'last_played.json'),
+			'playlist-dir-path': os.path.join(self.configdir, 'playlists'),
+		}
+		conf_file = os.path.join(self.configdir, 'config.json')
+		try:
+			with open(conf_file, 'r') as conf:
+				for k,v in json.load(conf).items():
+					temp_conf[k] = v
+		except Exception as e:
+			if self._debug: print(e)
+		if not os.path.isdir(temp_conf['playlist-dir-path']):
+			os.makedirs(temp_conf['playlist-dir-path'])
+
+		with open(conf_file, 'w') as conf:
+			json.dump(temp_conf, conf, indent=4)
+		return temp_conf
 
 	def _load_data(self):
 		default_data = self.DATA.copy()
-		if os.path.isfile(self.data_file):
+		if os.path.isfile(self.CONFIG['last-played-file']):
 			try:
-				with open(self.data_file, 'r') as conf:
-					return json.load(conf, object_pairs_hook=OrderedDict)
-			except:
-				pass
+				with open(self.CONFIG['last-played-file'], 'r') as conf:
+					default_data['last_played'] = json.load(conf, object_pairs_hook=OrderedDict)
+			except Exception as e:
+				if self._debug: print(e)
+		for f in os.listdir(self.CONFIG['playlist-dir-path']):
+			if f.endswith('.playlist.json'):
+				pl_name = f.replace(".playlist.json", "")
+				try:
+					with open(os.path.join(self.CONFIG['playlist-dir-path'], f), 'r') as pl:
+						default_data['playlists'][pl_name] = json.load(pl, object_pairs_hook=OrderedDict)
+				except Exception as e:
+					if self._debug: print(e)
 		return default_data
+
+	def write(self):
+		for pl_name, obj in self.get_playlists().items():
+			pl_file = os.path.join(self.CONFIG['playlist-dir-path'], '{}.playlist.json'.format(pl_name))
+			with open(pl_file, 'w') as pl:
+				json.dump(obj, pl, indent=4)
+
+		with open(self.CONFIG['last-played-file'], 'w') as conf:
+			conf.write(json.dumps(self.DATA['last_played'], indent=4))
 
 	def station_to_dict(self, station_instance):
 		d = station_instance.get_dict()
@@ -108,14 +148,12 @@ class iHeart_Storage(object):
 			 track = self.current_track_to_dict(track)
 		if playlist_name not in self.DATA['playlists']:
 			self.DATA['playlists'][playlist_name] = OrderedDict()
-		self.DATA['playlists'][playlist_name][track['__id__']] = track
+		self.DATA['playlists'][playlist_name][track['__id__']] = track #__id__ is unique iheart id
 
 	def get_playlists(self):
 		return self.DATA['playlists']
 
-	def write(self):
-		with open(self.data_file, 'w') as conf:
-			conf.write(json.dumps(self.DATA, indent=4))
+
 
 
 class ExitException(Exception):
@@ -146,9 +184,9 @@ class iHeart_CLI(iHeart):
 	CONTROLS = ALL_CONTROLS.copy()
 
 	def __init__(self, configdir, category=None, debug=False):
-		uuid_file = os.path.join(configdir, "iheart-cli.uuid")
+		uuid_file = os.path.join(configdir, "iheart-api.uuid")
 		super().__init__(uuid_store=uuid_file)
-		self.store = iHeart_Storage(configdir=configdir)
+		self.store = iHeart_Storage(configdir=configdir, debug=debug)
 		self._category = category or iHeart.ARTISTS
 		self.station_list = []
 		self.station = None
