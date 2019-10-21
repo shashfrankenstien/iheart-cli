@@ -130,7 +130,7 @@ def iget_market_id(zipCode):
 	return requests.get(markets_url.format(zipCode=zipCode), headers=HEADERS).json()['hits'][0]
 
 
-def isearch(keyword, limit=30, marketId=159):
+def isearch(keyword, limit=20, marketId=159):
 	res = requests.get(search_url, params={
 		'boostMarketId': marketId,
 		'maxRows':limit,
@@ -450,7 +450,7 @@ class Track(object):
 	def __str__(self):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
-			Colors.colorize(self.artist, Colors.BLUE, bold=True),
+			Colors.colorize(self.artist, Colors.LIGHT_BLUE, bold=True),
 			Colors.colorize(self.album, Colors.GREEN, bold=True)
 		)
 		if self.version:
@@ -508,12 +508,16 @@ class ArtistStation(Station):
 			decor
 		)
 
-	def _track_gen(self):
+	def iter_tracks(self):
 		while True:
-			station_data = iget_artist_station(self.user_id, self.id)
-			self.station_hash = station_data['id']
-			for trk_dict in iget_artist_streams(self.station_hash):
-				yield Track(trk_dict)
+			try:
+				station_data = iget_artist_station(self.user_id, self.id)
+				self.station_hash = station_data['id']
+				for trk_dict in iget_artist_streams(self.station_hash):
+					yield Track(trk_dict)
+			except Exception as e:
+				print(e)
+				time.sleep(0.5)
 
 	def get_current_track(self):
 		return self.current_track
@@ -528,7 +532,7 @@ class ArtistStation(Station):
 		self.current_track.play(on_complete=_next_player)
 
 	def play(self):
-		self._play_next(event=None, track_generator=self._track_gen())
+		self._play_next(event=None, track_generator=self.iter_tracks())
 
 	def info(self):
 		try:

@@ -4,6 +4,7 @@ from collections import OrderedDict
 import json
 
 from iheart import * #pylint: disable=unused-wildcard-import
+from iheart.iheart import Colors
 
 
 try:
@@ -39,9 +40,9 @@ class Playlist(ArtistStation):
 		return self.__dict
 
 	def __str__(self):
-		return "<Playlist: {}>".format(self.id)
+		return "<Playlist: {}>".format(Colors.colorize(self.id, Colors.CYAN))
 
-	def _track_gen(self):
+	def iter_tracks(self):
 		while True:
 			for trk in self.track_list:
 				yield trk
@@ -145,10 +146,11 @@ class iHeart_Storage(object):
 
 	def add_to_playlist(self, playlist_name, track):
 		if not isinstance(track, dict):
-			 track = self.current_track_to_dict(track)
+			track = self.current_track_to_dict(track)
 		if playlist_name not in self.DATA['playlists']:
 			self.DATA['playlists'][playlist_name] = OrderedDict()
-		self.DATA['playlists'][playlist_name][track['__id__']] = track #__id__ is unique iheart id
+		if track['__id__'] not in self.DATA['playlists'][playlist_name]:
+			self.DATA['playlists'][playlist_name][track['__id__']] = track #__id__ is unique iheart id
 
 	def get_playlists(self):
 		return self.DATA['playlists']
@@ -352,16 +354,16 @@ class iHeart_CLI(iHeart):
 					if cmd == 'exit':
 						raise ExitException("Exit!")
 					elif cmd == 'change-category':
-						old_cat = self._category
+						# old_cat = self._category
 						self.station.show_time(False)
 						self.choose_category(force=False)
-						if self._category!=old_cat:
-							if self._category == iHeart.PLAYLISTS:
-								# highjacking playlist category for Json stored implementation
-								new_station = self.choose_playlist()
-							else:
-								new_station = self.search_stations()
-							break
+						# if self._category!=old_cat:
+						if self._category == iHeart.PLAYLISTS:
+							# highjacking playlist category for Json stored implementation
+							new_station = self.choose_playlist()
+						else:
+							new_station = self.search_stations()
+						break
 
 					elif cmd == 'pause-play':
 						if self.station.is_playing():
@@ -371,7 +373,8 @@ class iHeart_CLI(iHeart):
 							self.station.toggle_pause(False)
 
 					elif cmd == 'list-playlist-tracks': # Only for playlist mode
-						print(self.station, "[", end="")
+						print(self.station)
+						print("[", end="")
 						print(*["\n\t{}. {}".format(i+1,t) for i,t in enumerate(self.station.track_list)])
 						print("]")
 
