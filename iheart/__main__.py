@@ -3,8 +3,15 @@ import traceback
 from collections import OrderedDict
 import json
 
-from iheart import * #pylint: disable=unused-wildcard-import
-from iheart.iheart import Colors
+from iheart import (
+	iHeart,
+	Track,
+	Station,
+	LiveStation,
+	SongStation,
+	ArtistStation,
+)
+from iheart.colors import Colors
 
 
 try:
@@ -181,13 +188,15 @@ class iHeart_CLI(iHeart):
 		's': 'search-stations',
 		'c': 'change-category',
 		'q': 'exit',
+		' ': 'pause-play', # implied (will not display in help)
+		'\r': 'print-current', # implied (will not display in help)
 	})
 
 	CONTROLS = ALL_CONTROLS.copy()
 
 	def __init__(self, configdir, category=None, debug=False):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
-		super().__init__(uuid_store=uuid_file)
+		super().__init__(uuid_store=uuid_file, print_url=False)
 		self.store = iHeart_Storage(configdir=configdir, debug=debug)
 		self._category = category or iHeart.ARTISTS
 		self.station_list = []
@@ -197,7 +206,8 @@ class iHeart_CLI(iHeart):
 	def print_help(self):
 		wipeline()
 		for cmd, action in self.CONTROLS.items():
-			print("\t", cmd, "  ", action)
+			if cmd.strip() != '': # ignore the implied controls that cannot be printed
+				print("\t", cmd, "  ", action)
 
 	def choose_category(self, force=True):
 		print("Pick a category -")
@@ -211,7 +221,7 @@ class iHeart_CLI(iHeart):
 			cats.append(self.CATEGORIES[c])
 
 		for i, s in enumerate(cats):
-			print("\t", i, ")", s)
+			print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s)
 		try:
 			choice = input("Pick: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
@@ -247,7 +257,7 @@ class iHeart_CLI(iHeart):
 			if len(self.station_list)==0:
 				raise Exception("No stations found")
 			for i, s in enumerate(self.station_list):
-				print("\t", i, ")", s.name)
+				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s.name)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
@@ -270,7 +280,7 @@ class iHeart_CLI(iHeart):
 					plen = len(pl[s])
 					plen_comment = "tracks" if plen>1 else "track"
 					plen_disp = "[{} {}]".format(plen, plen_comment)
-				print("\t", i, ")", s, plen_disp)
+				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
@@ -300,7 +310,7 @@ class iHeart_CLI(iHeart):
 					plen = len(pl[s])
 					plen_comment = "tracks" if plen>1 else "track"
 					plen_disp = "[{} {}]".format(plen, plen_comment)
-				print("\t", i, ")", s, plen_disp)
+				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
@@ -315,7 +325,7 @@ class iHeart_CLI(iHeart):
 			return None
 
 	def get_command(self):
-		cmd = getch().strip().lower()
+		cmd = getch().lower()
 		if isinstance(cmd, bytes): cmd = cmd.decode('utf-8', errors='ignore')
 		return (self.CONTROLS.get(cmd) or '').lower()
 
@@ -353,6 +363,14 @@ class iHeart_CLI(iHeart):
 					wipeline()
 					if cmd == 'exit':
 						raise ExitException("Exit!")
+
+					elif cmd == 'print-current':
+						self.station.show_time(False)
+						if self._category == iHeart.STATIONS:
+							print(self.station)
+						else:
+							print(self.station.current_track)
+
 					elif cmd == 'change-category':
 						# old_cat = self._category
 						self.station.show_time(False)
@@ -382,19 +400,25 @@ class iHeart_CLI(iHeart):
 						self.station.show_time(False)
 						new_station = self.list_current_stations()
 						break
+
 					elif cmd == 'search-stations': # No search when in playlists
 						self.station.show_time(False)
 						new_station = self.search_stations()
 						break
+
 					elif cmd == 'information':
 						printjson(self.station.info())
+
 					elif cmd == 'next':
 						self.station.forward()
+
 					elif cmd == 'help':
 						self.print_help()
+
 					elif cmd == 'add-to-playlist':
 						self.station.show_time(False)
 						self.add_to_playlist()
+
 		except:
 			self._debug: traceback.print_exc()
 			raise

@@ -3,54 +3,15 @@ import vlc
 import time
 import logging
 import traceback
-import random
-import requests
-import uuid
+
+from .colors import Colors
+from . import client
+
+
 
 # Install VLC on windows
-# certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.8/win32/vlc-3.0.8-win32.exe" "vlc-3.0.8-win32.exe"
-# vlc-3.0.8-win32.exe /L=1033 /S
-
-
-new_user_url = 'https://us.api.iheart.com/api/v1/account/loginOrCreateOauthUser'
-markets_url = 'https://us.api.iheart.com/api/v2/content/markets?countryCode=US&limit=1&cache=true&zipCode={zipCode}'
-search_url = 'https://us.api.iheart.com/api/v3/search/all'
-
-#stations
-station_stream_url = 'https://us.api.iheart.com/api/v2/content/liveStations/{stream_id}'
-meta_url = 'https://us.api.iheart.com/api/v3/live-meta/stream/{stream_id}/currentTrackMeta'
-
-
-artist_url = 'https://us.api.iheart.com/api/v1/catalog/getArtistByArtistId?artistId={artist_id}' #GET
-artist_profile_url = 'https://us.api.iheart.com/api/v3/artists/profiles/{artist_id}' #GET
-similar_artists_url = 'https://us.api.iheart.com/api/v1/catalog/artist/{artist_id}/getSimilar' #GET
-artist_albums_url = 'https://us.api.iheart.com/api/v3/catalog/artist/{artist_id}/albums' #GET
-
-artist_playlist_url = 'https://us.api.iheart.com/api/v2/playlists/{user_id}/ARTIST/{artist_id}' #POST formData = {'contentId':artist_id, 'playedFrom':10}
-artist_stream_url = 'https://us.api.iheart.com/api/v2/playback/streams' # Takes steramId in POST params
-
-
-#NOTE useful track info - No stream available
-track_url = 'https://us.api.iheart.com/api/v1/catalog/getTrackByTrackId?trackId={track_id}' #GET
-track2_url = 'https://us.api.iheart.com/api/v3/catalog/tracks/{track_id}' #GET
-
-
-
-HEADERS = {
-	"Host": "us.api.iheart.com",
-	"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0",
-	"Accept": "application/json, text/plain, */*",
-	"Accept-Language": "en-US,en;q=0.5",
-	"Accept-Encoding": "gzip, deflate, br",
-	"Referer": "https://www.iheart.com/",
-	"X-hostName": "webapp.US",
-	"X-Locale": "en-US",
-	"Origin": "https://www.iheart.com",
-	"DNT": "1",
-	"Connection": "keep-alive"
-}
-
-
+# certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.9/win32/vlc-3.0.9-win32.exe" "vlc-3.0.9-win32.exe"
+# vlc-3.0.9-win32.exe /L=1033 /S
 
 
 
@@ -58,136 +19,9 @@ HEADERS = {
 CWD = os.path.dirname(os.path.realpath(__file__))
 UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
-
-class Colors(object):
-	RED = 31
-	GREEN = 32
-	YELLOW = 93#33
-	BLUE = 34
-	PINK = 35
-	LIGHT_BLUE = 36
-	WHITE = 37
-	GRAY = 90
-	CYAN = 96
-
-	@staticmethod
-	def colorize(message, color, bold=False):
-		if isinstance(color, list):
-			color = random.choice(color)
-		color_code = '{};{}'.format(1 if bold else 0, color)
-		# return "\u001b[{}m".format(color_code)+message+"\u001b[0m"
-		return "\033[{}m".format(color_code)+message+"\033[0m"
+PRINT_PLAYING_URL = False
 
 
-def _generic_get(url):
-	res = requests.get(url, headers=HEADERS)
-	try:
-		return res.json()
-	except:
-		raise Exception(res.text)
-
-
-# **************************************************************************************
-# ********************************** API Functions *************************************
-# **************************************************************************************
-
-
-def ilogin(uuid_store):
-	global HEADERS
-	accessToken = 'anon'
-	uu = ''
-	if os.path.isfile(uuid_store):
-		with open(uuid_store, 'r') as u:
-			uu = u.read()
-	if not uu:
-		uu = str(uuid.uuid1())
-	body = {
-		'acessToken': accessToken,
-		'accessTokenType': accessToken,
-		'deviceId': uu,
-		'deviceName': 'python-CLI',
-		'host': 'webapp.US',
-		'oauthUuid': uu,
-		'userName': accessToken+uu
-	}
-	res = requests.post(new_user_url, data=body, headers=HEADERS)
-	if res.status_code == 200:
-		with open(uuid_store, 'w') as u:
-			u.write(uu)
-		user = res.json()
-		HEADERS.update({
-			'X-Ihr-Profile-Id': str(user['profileId']),
-			'X-Ihr-Session-Id': user['sessionId'],
-			'X-User-Id': str(user['profileId']),
-			'X-Session-Id': user['sessionId'],
-		})
-		return user
-	else:
-		raise Exception(res.text)
-
-
-def iget_market_id(zipCode):
-	return requests.get(markets_url.format(zipCode=zipCode), headers=HEADERS).json()['hits'][0]
-
-
-def isearch(keyword, limit=20, marketId=159):
-	res = requests.get(search_url, params={
-		'boostMarketId': marketId,
-		'maxRows':limit,
-		'bundle':True,
-		'keyword':True,
-		'keywords': keyword,
-	}, headers=HEADERS)
-	return res.json()
-
-
-def iget_station_streams(stream_id):
-	if isinstance(stream_id, (list, set)):
-		stream_id = ','.join(stream_id)
-	res = requests.get(station_stream_url.format(stream_id=stream_id), headers=HEADERS).json()
-	if 'hits' in res:
-		return res['hits'][0].get("streams") or []
-	else:
-		raise Exception(str(res))
-
-def iget_live_meta(stream_id):
-	return _generic_get(meta_url.format(stream_id=stream_id))
-
-
-def iget_artist_profile(artist_id):
-	return _generic_get(artist_profile_url.format(artist_id=artist_id))
-
-def iget_artist_bio(artist_id):
-	return _generic_get(artist_url.format(artist_id=artist_id))
-
-
-def iget_artist_station(user_id, artist_id):
-	res = requests.post(
-		artist_playlist_url.format(user_id=user_id, artist_id=artist_id),
-		data={'contentId':artist_id},
-		headers=HEADERS
-	)
-	try:
-		return res.json()
-	except:
-		raise Exception(res.text)
-
-
-def iget_artist_streams(astream_id):
-	res = requests.post(artist_stream_url, json={
-		'hostName': 'webapp.US',
-		'playedFrom': 1,
-		'stationId': astream_id,
-		'stationType': 'RADIO'
-	}, headers=HEADERS)
-	try:
-		return res.json().get('items') or []
-	except:
-		raise Exception(res.text)
-
-
-def iget_track_info(track_id):
-	return _generic_get(track_url.format(track_id=track_id))
 
 
 
@@ -375,7 +209,7 @@ class LiveStation(Station):
 		)
 
 	def _parse_stream(self):
-		self.streams = iget_station_streams(self.id)
+		self.streams = client.iget_station_streams(self.id)
 		if 'hls_stream' in self.streams:
 			self.mrl = self.streams['hls_stream'].strip()
 		elif 'secure_shoutcast_stream' in self.streams:
@@ -396,7 +230,7 @@ class LiveStation(Station):
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
 			Colors.colorize(self.description, Colors.BLUE, bold=True),
 			Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
-			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False)
+			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False) if PRINT_PLAYING_URL else ''
 		))
 		player = VLCPlayer.get_player(self.mrl)
 		# player.register_event(player.POSITION_CHANGED, lambda e: sys.stdout.write(str(e.u.new_time)+"\r"+))
@@ -413,7 +247,7 @@ class LiveStation(Station):
 
 	def info(self):
 		try:
-			return iget_live_meta(self.id)
+			return client.iget_live_meta(self.id)
 		except Exception as e:
 			print(e)
 
@@ -472,7 +306,7 @@ class Track(object):
 			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def play(self, on_complete):
-		sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
+		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 		sys.stdout.write(str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
 		player.register_event(player.END_REACHED, on_complete)
@@ -511,9 +345,9 @@ class ArtistStation(Station):
 	def iter_tracks(self):
 		while True:
 			try:
-				station_data = iget_artist_station(self.user_id, self.id)
+				station_data = client.iget_artist_station(self.user_id, self.id)
 				self.station_hash = station_data['id']
-				for trk_dict in iget_artist_streams(self.station_hash):
+				for trk_dict in client.iget_artist_streams(self.station_hash):
 					yield Track(trk_dict)
 			except Exception as e:
 				print(e)
@@ -575,13 +409,15 @@ class iHeart(object):
 	TALKSHOWS = "talkShows"
 	TALKTHEMES = "talkThemes"
 
-	def __init__(self, uuid_store=UUID_STORE):
-		self.user = ilogin(uuid_store=uuid_store)
+	def __init__(self, uuid_store=UUID_STORE, print_url=False):
+		self.user = client.ilogin(uuid_store=uuid_store)
 		self.user_id = self.user['profileId']
+		global PRINT_PLAYING_URL
+		PRINT_PLAYING_URL = print_url
 
 	def search(self, keyword, category=None):
 		if category is None: category = self.ARTISTS
-		search_res = isearch(keyword)
+		search_res = client.isearch(keyword)
 
 		if category==self.STATIONS:
 			station_class = LiveStation

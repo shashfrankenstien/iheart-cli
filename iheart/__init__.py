@@ -1,1 +1,1 @@
-from .iheart import iHeart, Track, ArtistStation, LiveStation, SongStation, Station
+from .player import iHeart, Track, ArtistStation, LiveStation, SongStation, Station
