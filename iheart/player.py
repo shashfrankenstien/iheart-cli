@@ -233,7 +233,6 @@ class LiveStation(Station):
 			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False) if PRINT_PLAYING_URL else ''
 		))
 		player = VLCPlayer.get_player(self.mrl)
-		# player.register_event(player.POSITION_CHANGED, lambda e: sys.stdout.write(str(e.u.new_time)+"\r"+))
 		player.play()
 
 	def toggle_pause(self, pause=True):
@@ -307,7 +306,7 @@ class Track(object):
 
 	def play(self, on_complete):
 		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
-		sys.stdout.write(str(self) + "\n\r")
+		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.RED, bold=True) + str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
 		player.register_event(player.END_REACHED, on_complete)
 		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)

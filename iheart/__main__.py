@@ -2,6 +2,7 @@ import os, sys
 import traceback
 from collections import OrderedDict
 import json
+import random
 
 from iheart import (
 	iHeart,
@@ -42,17 +43,32 @@ class Playlist(ArtistStation):
 		self.name = playlist_dict['name']
 		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
 		self.track_list = [Track(trk_dict) for trk_dict in playlist_dict['track_dict_list']]
+		self.shuffle = False
 
 	def get_dict(self):
 		return self.__dict
 
 	def __str__(self):
-		return "<Playlist: {}>".format(Colors.colorize(self.id, Colors.CYAN))
+		return "<Playlist: {}> {}".format(
+			Colors.colorize(self.id, Colors.CYAN),
+			Colors.colorize("[Shuffle]", Colors.PINK) if self.shuffle else '',
+		)
+
+	def toggle_shuffle(self):
+		self.shuffle = not self.shuffle
 
 	def iter_tracks(self):
+		index = 0
 		while True:
-			for trk in self.track_list:
-				yield trk
+			yield self.track_list[index]
+
+			if not self.shuffle: # sequential iter through playlist
+				index = (index + 1) % len(self.track_list)
+			else: # shuffle through playlist
+				possible_indices = list(range(len(self.track_list)))
+				if index in possible_indices: possible_indices.remove(index)
+				index = random.choice(possible_indices)
+
 
 
 class iHeart_Storage(object):
@@ -231,7 +247,7 @@ class iHeart_CLI(iHeart):
 				# Modifying controls based on choice
 				self.CONTROLS = self.ALL_CONTROLS.copy()
 				if self._category == iHeart.PLAYLISTS:
-					del self.CONTROLS['s'] # No search when in playlists
+					self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
 					self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
 				elif self._category == iHeart.STATIONS:
 					del self.CONTROLS['+'] # Cannot add live stations to playlists
@@ -372,10 +388,8 @@ class iHeart_CLI(iHeart):
 							print(self.station.current_track)
 
 					elif cmd == 'change-category':
-						# old_cat = self._category
 						self.station.show_time(False)
 						self.choose_category(force=False)
-						# if self._category!=old_cat:
 						if self._category == iHeart.PLAYLISTS:
 							# highjacking playlist category for Json stored implementation
 							new_station = self.choose_playlist()
@@ -405,6 +419,11 @@ class iHeart_CLI(iHeart):
 						self.station.show_time(False)
 						new_station = self.search_stations()
 						break
+
+					elif cmd == 'shuffle-playlist-toggle':
+						self.station.toggle_shuffle()
+						self.station.show_time(False)
+						print("Shuffle on" if self.station.shuffle else "Shuffle off")
 
 					elif cmd == 'information':
 						printjson(self.station.info())
