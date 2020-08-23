@@ -378,6 +378,7 @@ class iHeart_CLI(iHeart):
 					self.station = new_station
 					self.station.stop()
 					new_station = None
+					continue # This will restart the while loop to make sure everything is set correctly
 
 				if self.station is None:
 					if self._category == iHeart.PLAYLISTS:
@@ -386,12 +387,14 @@ class iHeart_CLI(iHeart):
 					else:
 						self.station = self.search_stations(keyword=search_term)
 					new_station = None
+					continue # This will restart the while loop to make sure everything is set correctly
 
 				if not self.station.is_playing() and not self.station.is_paused(): # station is not None
 					print(self.station)
 					self.station.play()
 					self.store.update_last_played(self.station)
 					self.store.write()
+					continue # This will restart the while loop to make sure everything is set correctly
 
 				while True:
 					self.station.show_time(True)
