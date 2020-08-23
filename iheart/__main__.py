@@ -3,8 +3,10 @@ import traceback
 from collections import OrderedDict
 import json
 import random
+import argparse
 
 from iheart import (
+	__version__,
 	iHeart,
 	Track,
 	Station,
@@ -58,7 +60,7 @@ class Playlist(ArtistStation):
 		self.shuffle = not self.shuffle
 
 	def iter_tracks(self):
-		index = 0
+		index = random.choice(range(len(self.track_list))) if self.shuffle else 0
 		while True:
 			yield self.track_list[index]
 
@@ -214,16 +216,38 @@ class iHeart_CLI(iHeart):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
 		super().__init__(uuid_store=uuid_file, print_url=False)
 		self.store = iHeart_Storage(configdir=configdir, debug=debug)
-		self._category = category or iHeart.ARTISTS
 		self.station_list = []
 		self.station = None
 		self._debug = debug
+		if category is None:
+			self.choose_category()
+		else:
+			self.category = category
+
 
 	def print_help(self):
 		wipeline()
 		for cmd, action in self.CONTROLS.items():
 			if cmd.strip() != '': # ignore the implied controls that cannot be printed
 				print("\t", cmd, "  ", action)
+
+	@property
+	def category(self):
+		return self._category
+
+	@category.setter
+	def category(self, category):
+		if category not in self.CATEGORIES:
+			raise Exception("Unknown category {}".format(category))
+		self._category = category
+		# Modifying controls based on selected category
+		self.CONTROLS = self.ALL_CONTROLS.copy()
+		if self._category == iHeart.PLAYLISTS:
+			self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
+			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
+		elif self._category == iHeart.STATIONS:
+			del self.CONTROLS['+'] # Cannot add live stations to playlists
+
 
 	def choose_category(self, force=True):
 		print("Pick a category -")
@@ -243,15 +267,7 @@ class iHeart_CLI(iHeart):
 			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
 				raise Exception("Invalid choice!")
 			else:
-				self._category = cats_actual[int(choice)]
-				# Modifying controls based on choice
-				self.CONTROLS = self.ALL_CONTROLS.copy()
-				if self._category == iHeart.PLAYLISTS:
-					self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
-					self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
-				elif self._category == iHeart.STATIONS:
-					del self.CONTROLS['+'] # Cannot add live stations to playlists
-
+				self.category = cats_actual[int(choice)]
 		except Exception as e:
 			if self._debug: print(e)
 			if force: self.choose_category()
@@ -315,6 +331,15 @@ class iHeart_CLI(iHeart):
 			if self._debug: print(e)
 			traceback.print_exc()
 
+	def get_playlist_as_station(self, playlist_name):
+		try:
+			pl = self.store.get_playlists()
+			pl_dict = {'name': playlist_name, 'track_dict_list': list(pl[playlist_name].values())}
+			return Playlist(pl_dict)
+		except Exception as e:
+			if self._debug: print(e)
+			return None
+
 	def choose_playlist(self):
 		try:
 			print("Choose playlist -")
@@ -332,10 +357,7 @@ class iHeart_CLI(iHeart):
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
 				raise Exception("Invalid choice!")
 			else:
-				pl_choice = pl_names[int(choice)]
-				track_dict_list = list(pl[pl_choice].values())
-				pl_dict = {'name': pl_choice, 'track_dict_list': track_dict_list}
-				return Playlist(pl_dict)
+				return self.get_playlist_as_station(playlist_name=pl_names[int(choice)])
 		except Exception as e:
 			if self._debug: print(e)
 			return None
@@ -356,18 +378,16 @@ class iHeart_CLI(iHeart):
 					self.station = new_station
 					self.station.stop()
 					new_station = None
-					continue
 
-				elif self.station is None:
+				if self.station is None:
 					if self._category == iHeart.PLAYLISTS:
 						# highjacking playlist category for Json stored implementation
 						self.station = self.choose_playlist()
 					else:
 						self.station = self.search_stations(keyword=search_term)
 					new_station = None
-					continue
 
-				elif not self.station.is_playing() and not self.station.is_paused(): # station is not None
+				if not self.station.is_playing() and not self.station.is_paused(): # station is not None
 					print(self.station)
 					self.station.play()
 					self.store.update_last_played(self.station)
@@ -450,18 +470,42 @@ class iHeart_CLI(iHeart):
 
 
 def main():
-	if '-d' in sys.argv or '--debug' in sys.argv:
-		debug = True
-		if '--debug' in sys.argv: sys.argv.remove('--debug')
-		if '-d' in sys.argv: sys.argv.remove('-d')
-	else:
-		debug = False
+	parser = argparse.ArgumentParser("iheart")
+	parser.add_argument("-v", '--version', help="show version and exit", action="store_true")
+	parser.add_argument("-d", '--debug', help="enable debug messages", action="store_true")
 
-	if len(sys.argv) > 1:
-		search_term = sys.argv[1].strip()
+	group = parser.add_mutually_exclusive_group(required=False)
+	group.add_argument("-a", "--artist", help="search Artist radio with provided artist name")
+	group.add_argument("-s", "--song", help="search Song radio with provided song name")
+	group.add_argument("-l", "--live", help="search Live radio with provided station name")
+	group.add_argument("-p", "--playlist", help="play selected local playlist (exact name required)")
+	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works if --playlist is specified)", action='store_true')
+
+	args = parser.parse_args()
+
+	if args.version:
+		print(__version__)
+		return None
+
+	if args.artist is not None:
+		category = iHeart.ARTISTS
+		search_term = args.artist
+
+	elif args.song is not None:
+		category = iHeart.TRACKS
+		search_term = args.song
+
+	elif args.live is not None:
+		category = iHeart.STATIONS
+		search_term = args.live
+
+	elif args.playlist is not None:
+		category = iHeart.PLAYLISTS
+		search_term = args.playlist
+
 	else:
+		category = None
 		search_term = None
-
 
 	configdir = os.path.join(
 		os.environ.get('APPDATA') or
@@ -472,13 +516,18 @@ def main():
 	if not os.path.isdir(configdir): os.makedirs(configdir)
 
 	try:
-		radio = iHeart_CLI(configdir, debug=debug)
-		radio.choose_category()
-		radio.run_cli(search_term)
+
+		radio = iHeart_CLI(configdir, category=category, debug=args.debug)
+		if category == iHeart.PLAYLISTS:
+			# set the playlist if name is correct, else will be set to None
+			radio.station = radio.get_playlist_as_station(search_term)
+			radio.station.shuffle = args.shuffle
+		radio.run_cli(search_term=search_term)
+
 	except KeyboardInterrupt:
 		print("KeyboardInterrupt")
 	except Exception as e:
-		if debug: traceback.print_exc()
+		if args.debug: traceback.print_exc()
 		print(e)
 
 

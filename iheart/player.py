@@ -9,10 +9,9 @@ from . import client
 
 
 
-# Install VLC on windows
-# certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.9/win32/vlc-3.0.9-win32.exe" "vlc-3.0.9-win32.exe"
-# vlc-3.0.9-win32.exe /L=1033 /S
-
+# Silent install VLC on windows
+# certutil.exe -urlcache -split -f "https://get.videolan.org/vlc/3.0.11/win32/vlc-3.0.11-win32.exe" "vlc-3.0.11-win32.exe"
+# vlc-3.0.11-win32.exe /L=1033 /S
 
 
 
@@ -20,7 +19,6 @@ CWD = os.path.dirname(os.path.realpath(__file__))
 UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 PRINT_PLAYING_URL = False
-
 
 
 
@@ -306,7 +304,7 @@ class Track(object):
 
 	def play(self, on_complete):
 		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
-		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.RED, bold=True) + str(self) + "\n\r")
+		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
 		player.register_event(player.END_REACHED, on_complete)
 		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
