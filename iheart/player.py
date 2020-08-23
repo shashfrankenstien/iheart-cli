@@ -108,12 +108,12 @@ class VLCPlayer(object):
 		self._manager = None
 
 	def forward(self):
-		"""Go forward one sec"""
+		"""Go forward 10 secs"""
 		player = self.get_internal_player()
 		player.set_time(player.get_time() + 10000)
 
 	def rewind(self):
-		"""Go back one sec"""
+		"""Go back 10 secs"""
 		player = self.get_internal_player()
 		player.set_time(player.get_time() - 10000)
 
@@ -273,6 +273,7 @@ class Track(object):
 		self.minutes = self.length // 60
 		self.seconds = self.length % 60
 
+		self._on_complete_cb = lambda event:None
 		self.__show_time = True
 
 	def get_dict(self):
@@ -303,13 +304,18 @@ class Track(object):
 			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def play(self, on_complete):
+		self._on_complete_cb = on_complete
 		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
-		player.register_event(player.END_REACHED, on_complete)
+		player.register_event(player.END_REACHED, self._on_complete_cb)
 		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
 		player.play()
 
+	def force_end(self):
+		player = VLCPlayer.get_player(self.mrl)
+		player.stop()
+		self._on_complete_cb(None)
 
 
 
@@ -356,14 +362,14 @@ class ArtistStation(Station):
 	def show_time(self, show=True):
 		self.current_track.show_time(show)
 
-	def _play_next(self, event, track_generator):
+	def _play_next(self, track_generator):
 		self.current_track = next(track_generator)
 		self.mrl = self.current_track.mrl
-		_next_player = lambda next_event: self._play_next(event=next_event, track_generator=track_generator)
+		_next_player = lambda _: self._play_next(track_generator=track_generator)
 		self.current_track.play(on_complete=_next_player)
 
 	def play(self):
-		self._play_next(event=None, track_generator=self.iter_tracks())
+		self._play_next(track_generator=self.iter_tracks())
 
 	def info(self):
 		try:
@@ -372,8 +378,7 @@ class ArtistStation(Station):
 			print(e)
 
 	def forward(self):
-		vlc_player = VLCPlayer.get_player(self.mrl).get_internal_player()
-		vlc_player.set_time(vlc_player.get_length())
+		self.current_track.force_end()
 
 
 class SongStation(ArtistStation):
