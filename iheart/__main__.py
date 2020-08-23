@@ -473,6 +473,7 @@ def main():
 	parser = argparse.ArgumentParser("iheart")
 	parser.add_argument("-v", '--version', help="show version and exit", action="store_true")
 	parser.add_argument("-d", '--debug', help="enable debug messages", action="store_true")
+	parser.add_argument('--no-color', help="Disable color output", action="store_true")
 
 	group = parser.add_mutually_exclusive_group(required=False)
 	group.add_argument("-a", "--artist", help="search Artist radio with provided artist name")
@@ -487,6 +488,10 @@ def main():
 		print(__version__)
 		return None
 
+	if args.no_color or not Colors.supported():
+		Colors.DISABLED = True
+
+	# setup category and search term if provided
 	if args.artist is not None:
 		category = iHeart.ARTISTS
 		search_term = args.artist
