@@ -24,6 +24,7 @@ This project does not implement a player. It uses VLC for cross platform audio p
 ```shell
 $ git clone https://github.com/shashfrankenstien/iHeart-cli.git
 $ cd iHeart-cli
+$ python3 -m pip install -r requirements.txt
 $ python3 -m iheart
 ```
 
