@@ -1,6 +1,6 @@
 import os, sys
 import traceback
-from collections import OrderedDict
+from collections import OrderedDict, deque
 import json
 import random
 import argparse
@@ -44,8 +44,10 @@ class Playlist(ArtistStation):
 		self.__dict = playlist_dict
 		self.name = playlist_dict['name']
 		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
-		self.track_list = [Track(trk_dict) for trk_dict in playlist_dict['track_dict_list']]
+		self.track_list = deque([Track(trk_dict) for trk_dict in playlist_dict['track_dict_list']]) # deque so as to use rotate
+		self.tracks_to_play = self.track_list.copy() # make copy to implement shuffle
 		self.shuffle = False
+		self.now_playing_id = None
 
 	def get_dict(self):
 		return self.__dict
@@ -58,18 +60,27 @@ class Playlist(ArtistStation):
 
 	def toggle_shuffle(self):
 		self.shuffle = not self.shuffle
+		if self.shuffle:
+			random.shuffle(self.tracks_to_play) # shuffle playlist
+		else: # shuffle off
+			# if there is a song playing in shuffle mode,
+			# rotate tracklist such that the playlist continues from the current track
+			current_idx = 0
+			if self.now_playing_id is not None:
+				for i, t in enumerate(self.track_list):
+					if t.id==self.now_playing_id:
+						current_idx = i
+						break
+			# self.tracks_to_play = self.track_list[current_idx:] + self.track_list[:current_idx] # make copy of original track list
+			self.tracks_to_play = self.track_list.copy() # make copy of original track list
+			self.tracks_to_play.rotate(-1*current_idx) # rotate left to current track
 
 	def iter_tracks(self):
-		index = random.choice(range(len(self.track_list))) if self.shuffle else 0
 		while True:
-			yield self.track_list[index]
-
-			if not self.shuffle: # sequential iter through playlist
-				index = (index + 1) % len(self.track_list)
-			else: # shuffle through playlist
-				possible_indices = list(range(len(self.track_list)))
-				if index in possible_indices: possible_indices.remove(index)
-				index = random.choice(possible_indices)
+			new_track = self.tracks_to_play[0]
+			self.now_playing_id = new_track.id
+			yield new_track
+			self.tracks_to_play.rotate(-1) # rotate left to go to next track
 
 
 
@@ -288,6 +299,8 @@ class iHeart_CLI(iHeart):
 		try:
 			if len(self.station_list)==0:
 				raise Exception("No stations found")
+			elif len(self.station_list)==1:
+				return self.station_list[0]
 			for i, s in enumerate(self.station_list):
 				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s.name)
 
@@ -529,7 +542,7 @@ def main():
 		if category == iHeart.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)
-			radio.station.shuffle = args.shuffle
+			if radio.station is not None: radio.station.toggle_shuffle()
 		radio.run_cli(search_term=search_term)
 
 	except KeyboardInterrupt:

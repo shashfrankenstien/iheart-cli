@@ -109,7 +109,7 @@ def iget_station_streams(stream_id):
 		stream_id = ','.join(stream_id)
 	res = requests.get(station_stream_url.format(stream_id=stream_id), headers=HEADERS).json()
 	if 'hits' in res:
-		return res['hits'][0].get("streams") or []
+		return res['hits'][0].get("streams") or {}
 	else:
 		raise Exception(str(res))
 
