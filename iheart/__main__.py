@@ -38,6 +38,15 @@ printjson = lambda j: print(json.dumps(j, indent=4))
 wipeline = lambda:sys.stdout.write("\33[2K\r")
 
 
+WELCOME_MSG = '''Welcome to iHeart cli player ({})!
+Type '?' during playback to show available commands.'''.format(__version__)
+
+WELCOME_MSG = Colors.colorize(
+	WELCOME_MSG,
+	Colors.YELLOW,
+	bold=True
+)
+
 
 class Playlist(ArtistStation):
 	'''Json stored playlist implementation using ArtistRadio'''
@@ -545,7 +554,8 @@ def main():
 	if not os.path.isdir(configdir): os.makedirs(configdir)
 
 	try:
-
+		# Welcome message
+		print(WELCOME_MSG)
 		radio = iHeart_CLI(configdir, category=category, debug=args.debug)
 		if category == iHeart.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
