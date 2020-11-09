@@ -74,7 +74,7 @@ def ilogin(uuid_store):
 		'userName': accessToken+uu
 	}
 	res = requests.post(new_user_url, data=body, headers=HEADERS)
-	if res.status_code == 200:
+	try:
 		with open(uuid_store, 'w') as u:
 			u.write(uu)
 		user = res.json()
@@ -85,7 +85,7 @@ def ilogin(uuid_store):
 			'X-Session-Id': user['sessionId'],
 		})
 		return user
-	else:
+	except:
 		raise Exception(res.text)
 
 

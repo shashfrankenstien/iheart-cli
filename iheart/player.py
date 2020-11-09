@@ -20,7 +20,13 @@ UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 PRINT_PLAYING_URL = False
 
-
+def vlc_is_installed() -> bool:
+	try:
+		i = vlc.Instance("--adaptive-use-access") # Create a VLC instance
+		i.release()
+		return True
+	except NameError:
+		return False
 
 
 # **************************************************************************************

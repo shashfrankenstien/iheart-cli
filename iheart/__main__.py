@@ -7,6 +7,7 @@ import argparse
 
 from iheart import (
 	__version__,
+	vlc_is_installed,
 	iHeart,
 	Track,
 	Station,
@@ -399,6 +400,8 @@ class iHeart_CLI(iHeart):
 						self.station = self.choose_playlist()
 					else:
 						self.station = self.search_stations(keyword=search_term)
+						if self.station is None:
+							search_term = None # no search results found. clearing search_term
 					new_station = None
 					continue # This will restart the while loop to make sure everything is set correctly
 
@@ -500,6 +503,11 @@ def main():
 
 	args = parser.parse_args()
 
+	if not vlc_is_installed():
+		print("Error: VLC Media Player is required but not installed. Please install it and try again!")
+		print("It can be installed from https://www.videolan.org/\n")
+		return 1
+
 	if args.version:
 		print(__version__)
 		return None
@@ -547,11 +555,17 @@ def main():
 
 	except KeyboardInterrupt:
 		print("KeyboardInterrupt")
-	except Exception as e:
-		if args.debug: traceback.print_exc()
+	except ExitException as e:
 		print(e)
+	except Exception:
+		print("error occured. use --debug flag to print error details")
+		if args.debug:
+			traceback.print_exc()
+			# print(e)
+		return 1
+	return 0
 
 
 
 if __name__ == "__main__":
-	main()
+	exit(main())

@@ -31,6 +31,5 @@ $ python3 -m iheart
 ## TODO
 
 * Improve messages while in use
-* Show a meaningful message if VLC is not installed
 * Add tests
 * Make it installable, probably through pip - [Great read](https://matthew-brett.github.io/pydagogue/installing_scripts.html)
