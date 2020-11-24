@@ -68,6 +68,13 @@ class Playlist(ArtistStation):
 			Colors.colorize("[Shuffle]", Colors.PINK) if self.shuffle else '',
 		)
 
+	def iter_tracks(self):
+		while True:
+			new_track = self.tracks_to_play[0]
+			self.now_playing_id = new_track.id
+			yield new_track
+			self.tracks_to_play.rotate(-1) # rotate left to go to next track
+
 	def toggle_shuffle(self):
 		self.shuffle = not self.shuffle
 		if self.shuffle:
@@ -81,17 +88,18 @@ class Playlist(ArtistStation):
 					if t.id==self.now_playing_id:
 						current_idx = i
 						break
-			# self.tracks_to_play = self.track_list[current_idx:] + self.track_list[:current_idx] # make copy of original track list
+
 			self.tracks_to_play = self.track_list.copy() # make copy of original track list
 			self.tracks_to_play.rotate(-1*current_idx) # rotate left to current track
 
-	def iter_tracks(self):
-		while True:
-			new_track = self.tracks_to_play[0]
-			self.now_playing_id = new_track.id
-			yield new_track
-			self.tracks_to_play.rotate(-1) # rotate left to go to next track
-
+	def jump_to(self, idx):
+		if idx < len(self.track_list):
+			track = self.track_list[idx]
+			for i, t in enumerate(self.tracks_to_play):
+				if t.id==track.id:
+					self.tracks_to_play.rotate(-1*(i-1)) # rotate left so that selected track will play next
+					self.forward() # then trigger jump to next song
+					break
 
 
 class iHeart_Storage(object):
@@ -227,8 +235,8 @@ class iHeart_CLI(iHeart):
 		's': 'search-stations',
 		'c': 'change-category',
 		'q': 'exit',
-		' ': 'pause-play', # implied (will not display in help)
-		'\r': 'print-current', # implied (will not display in help)
+		' ': 'pause-play', # <SPACEBAR> implied (will not display in help)
+		'\r': 'print-current', # <RETURN> (will not display in help)
 	})
 
 	CONTROLS = ALL_CONTROLS.copy()
@@ -256,6 +264,7 @@ class iHeart_CLI(iHeart):
 	def category(self):
 		return self._category
 
+
 	@category.setter
 	def category(self, category):
 		if category not in self.CATEGORIES:
@@ -266,8 +275,11 @@ class iHeart_CLI(iHeart):
 		if self._category == iHeart.PLAYLISTS:
 			self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
 			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
+			self.CONTROLS['j'] = 'jump-to-track' # Jump to track by index in playlist
 		elif self._category == iHeart.STATIONS:
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
+
+		self.CONTROLS.move_to_end('q') # make exit / quit the last option
 
 
 	def choose_category(self, force=True):
@@ -293,6 +305,7 @@ class iHeart_CLI(iHeart):
 			if self._debug: print(e)
 			if force: self.choose_category()
 
+
 	def search_stations(self, keyword=None):
 		try:
 			if keyword is None:
@@ -304,6 +317,7 @@ class iHeart_CLI(iHeart):
 		except Exception as e:
 			if self._debug: print(e)
 			return None
+
 
 	def list_current_stations(self):
 		try:
@@ -354,6 +368,7 @@ class iHeart_CLI(iHeart):
 			if self._debug: print(e)
 			traceback.print_exc()
 
+
 	def get_playlist_as_station(self, playlist_name):
 		try:
 			pl = self.store.get_playlists()
@@ -362,6 +377,7 @@ class iHeart_CLI(iHeart):
 		except Exception as e:
 			if self._debug: print(e)
 			return None
+
 
 	def choose_playlist(self):
 		try:
@@ -384,6 +400,22 @@ class iHeart_CLI(iHeart):
 		except Exception as e:
 			if self._debug: print(e)
 			return None
+
+
+	def playlist_jump_to_track(self):
+		try:
+			print("Jump to track -")
+			for i, t in enumerate(self.station.track_list):
+				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", t)
+
+			choice = input("Choice: ").strip()
+			if not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
+				raise Exception("Invalid choice!")
+			else:
+				self.station.jump_to(int(choice))
+		except Exception as e:
+			if self._debug: print(e)
+
 
 	def get_command(self):
 		cmd = getch().lower()
@@ -425,7 +457,10 @@ class iHeart_CLI(iHeart):
 					self.station.show_time(True)
 					cmd = self.get_command()
 					wipeline()
-					if cmd == 'exit':
+					if cmd == '':
+						continue
+
+					elif cmd == 'exit':
 						raise ExitException("Exit!")
 
 					elif cmd == 'print-current':
@@ -457,6 +492,10 @@ class iHeart_CLI(iHeart):
 						print("[", end="")
 						print(*["\n\t{}. {}".format(i+1,t) for i,t in enumerate(self.station.track_list)])
 						print("]")
+
+					elif cmd == 'jump-to-track': # Only for playlist mode
+						self.station.show_time(False)
+						self.playlist_jump_to_track()
 
 					elif cmd == 'list-last-search': # No search when in playlists
 						self.station.show_time(False)
@@ -560,7 +599,8 @@ def main():
 		if category == iHeart.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)
-			if radio.station is not None: radio.station.toggle_shuffle()
+			if radio.station is not None and args.shuffle == True:
+				radio.station.toggle_shuffle()
 		radio.run_cli(search_term=search_term)
 
 	except KeyboardInterrupt:
