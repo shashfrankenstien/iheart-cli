@@ -222,7 +222,7 @@ class iHeart_CLI(iHeart):
 		iHeart.PLAYLISTS: 'Playlists',
 	})
 
-	ALL_CONTROLS = OrderedDict({
+	COMMON_CONTROLS = OrderedDict({
 		'?': 'help',
 		'p': 'pause-play',
 		'n': 'next',
@@ -237,7 +237,7 @@ class iHeart_CLI(iHeart):
 		'\r': 'print-current', # <RETURN> (will not display in help)
 	})
 
-	CONTROLS = ALL_CONTROLS.copy() # this copy might be modified downstream according to type of station
+	CONTROLS = COMMON_CONTROLS.copy() # this copy might be modified downstream according to type of station
 
 	def __init__(self, configdir, debug=False):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
@@ -277,7 +277,7 @@ class iHeart_CLI(iHeart):
 	@station.setter
 	def station(self, station):
 		# Modifying controls based on selected station type
-		self.CONTROLS = self.ALL_CONTROLS.copy()
+		self.CONTROLS = self.COMMON_CONTROLS.copy()
 		if isinstance(station, Playlist):
 			self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
 			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists

@@ -16,7 +16,7 @@ from . import client
 
 
 CWD = os.path.dirname(os.path.realpath(__file__))
-UUID_STORE = os.path.join(CWD, "iheart.uuid")
+DEFAULT_UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 PRINT_PLAYING_URL = False
 
@@ -433,7 +433,7 @@ class iHeart(object):
 	TALKSHOWS = "talkShows"
 	TALKTHEMES = "talkThemes"
 
-	def __init__(self, uuid_store=UUID_STORE, print_url=False):
+	def __init__(self, uuid_store=DEFAULT_UUID_STORE, print_url=False):
 		self.user = client.ilogin(uuid_store=uuid_store)
 		self.user_id = self.user['profileId']
 		global PRINT_PLAYING_URL
