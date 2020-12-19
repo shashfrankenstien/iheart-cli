@@ -314,13 +314,14 @@ class Track(object):
 		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
+		player.stop()
 		player.register_event(player.END_REACHED, self._on_complete_cb)
 		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
 		player.play()
 
 	def force_end(self):
 		player = VLCPlayer.get_player(self.mrl)
-		player.stop()
+		player.stop() # calling .stop() is not required here, but it makes sense and doesn't hurt
 		self._on_complete_cb(None)
 
 
@@ -337,6 +338,8 @@ class ArtistStation(Station):
 
 		self.station_hash = None
 		self.current_track = None
+
+		self.repeat = False
 
 	def get_dict(self):
 		return self.__dict
@@ -369,8 +372,10 @@ class ArtistStation(Station):
 		self.current_track.show_time(show)
 
 	def _play_next(self, track_generator):
-		self.current_track = next(track_generator)
-		self.mrl = self.current_track.mrl
+		if self.repeat == False:
+			# go to the next track only if not in repeat mode
+			self.current_track = next(track_generator)
+			self.mrl = self.current_track.mrl
 		_next_player = lambda _: self._play_next(track_generator=track_generator)
 		self.current_track.play(on_complete=_next_player)
 
@@ -385,6 +390,9 @@ class ArtistStation(Station):
 
 	def forward(self):
 		self.current_track.force_end()
+
+	def toggle_repeat(self):
+		self.repeat = not self.repeat
 
 
 class SongStation(ArtistStation):
@@ -408,9 +416,10 @@ class iHeart(object):
 
 	TRACKS = 'tracks'
 	ARTISTS = 'artists'
-	ALBUMS = 'albums'
 	STATIONS = 'stations'
 
+	# other choices - Not implemented yet
+	ALBUMS = 'albums'
 	PLAYLISTS = 'playlists'
 	PODCASTS = "podcasts"
 	FEATURED_STATIONS = "featuredStations"
@@ -434,7 +443,8 @@ class iHeart(object):
 		elif category==self.TRACKS:
 			station_class = SongStation
 		else:
-			return search_res['results'][category]
+			# return search_res['results'][category]
+			raise NotImplementedError("'{}' not implemented yet")
 
 		out = []
 		for result in search_res['results'][category]:

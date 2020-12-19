@@ -229,6 +229,7 @@ class iHeart_CLI(iHeart):
 		'?': 'help',
 		'p': 'pause-play',
 		'n': 'next',
+		'r': 'repeat-track-toggle',
 		'i': 'information',
 		'+': 'add-to-playlist',
 		'l': 'list-last-search',
@@ -239,7 +240,7 @@ class iHeart_CLI(iHeart):
 		'\r': 'print-current', # <RETURN> (will not display in help)
 	})
 
-	CONTROLS = ALL_CONTROLS.copy()
+	CONTROLS = ALL_CONTROLS.copy() # this copy might be modified downstream according to type of station
 
 	def __init__(self, configdir, category=None, debug=False):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
@@ -453,7 +454,7 @@ class iHeart_CLI(iHeart):
 					self.store.write()
 					continue # This will restart the while loop to make sure everything is set correctly
 
-				while True:
+				while True: # start key-press loop
 					self.station.show_time(True)
 					cmd = self.get_command()
 					wipeline()
@@ -511,6 +512,11 @@ class iHeart_CLI(iHeart):
 						self.station.toggle_shuffle()
 						self.station.show_time(False)
 						print("Shuffle on" if self.station.shuffle else "Shuffle off")
+
+					elif cmd == 'repeat-track-toggle':
+						self.station.toggle_repeat()
+						self.station.show_time(False)
+						print("Repeat on" if self.station.repeat else "Repeat off")
 
 					elif cmd == 'information':
 						printjson(self.station.info())
