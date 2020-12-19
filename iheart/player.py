@@ -258,7 +258,11 @@ class LiveStation(Station):
 
 
 class Track(object):
-	def  __init__(self, track_dict):
+	# store a class level current playing MRL.
+	# - check against this to identify if track is being repeated
+	CURRENT_PLAYING_MRL = ''
+
+	def __init__(self, track_dict):
 		if 'streamUrl' not in track_dict:
 			raise Exception("stream not found")
 		self.__dict = track_dict
@@ -311,12 +315,15 @@ class Track(object):
 
 	def play(self, on_complete):
 		self._on_complete_cb = on_complete
-		if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
-		sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self) + "\n\r")
+		if self.mrl != self.CURRENT_PLAYING_MRL:
+			# only print now playing track name if the new track is different
+			if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
+			sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self) + "\n\r")
 		player = VLCPlayer.get_player(self.mrl)
 		player.stop()
 		player.register_event(player.END_REACHED, self._on_complete_cb)
 		player.register_event(player.POSITION_CHANGED, self._print_remaining_duration)
+		self.CURRENT_PLAYING_MRL = self.mrl # register class level current playing mrl
 		player.play()
 
 	def force_end(self):
