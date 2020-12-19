@@ -1,11 +1,11 @@
 # iHeart Radio
-> Command line client for iHeartRadio
+> Command line client for [iHeartRadio](https://www.iheart.com/)
 
 ![Python 3.6](https://img.shields.io/badge/python-3.6+-blue.svg)
 
 This project started off as a learning exercise. It is heavily inspired by [pianobar](https://github.com/PromyLOPh/pianobar) which I love!
 
-It implements a cross platform iHeartRadio console client in Python, only plays Live and Artist radio stations which are available without needing to create an account.
+It is a cross platform iHeartRadio console client implemented in Python; only plays Live and Artist radio stations which are available without needing to create an account.
 
 ## Features
 
