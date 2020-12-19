@@ -36,16 +36,13 @@ except ImportError:
 
 printjson = lambda j: print(json.dumps(j, indent=4))
 wipeline = lambda:sys.stdout.write("\33[2K\r")
+app_msg_color = lambda m: Colors.colorize(m, Colors.YELLOW, bold=False)
 
 
 WELCOME_MSG = '''Welcome to iHeart cli player ({})!
 Type '?' during playback to show available commands.'''.format(__version__)
 
-WELCOME_MSG = Colors.colorize(
-	WELCOME_MSG,
-	Colors.YELLOW,
-	bold=True
-)
+WELCOME_MSG = app_msg_color(WELCOME_MSG)
 
 
 class Playlist(ArtistStation):
@@ -259,7 +256,7 @@ class iHeart_CLI(iHeart):
 		wipeline()
 		for cmd, action in self.CONTROLS.items():
 			if cmd.strip() != '': # ignore the implied controls that cannot be printed
-				print("\t", cmd, "  ", action)
+				print("\t", app_msg_color(cmd), "  ", action)
 
 	@property
 	def category(self):
@@ -295,7 +292,7 @@ class iHeart_CLI(iHeart):
 			cats.append(self.CATEGORIES[c])
 
 		for i, s in enumerate(cats):
-			print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s)
+			print("\t", app_msg_color(str(i)), ")", s)
 		try:
 			choice = input("Pick: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
@@ -327,7 +324,7 @@ class iHeart_CLI(iHeart):
 			elif len(self.station_list)==1:
 				return self.station_list[0]
 			for i, s in enumerate(self.station_list):
-				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s.name)
+				print("\t", app_msg_color(str(i)), ")", s.name)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
@@ -350,7 +347,7 @@ class iHeart_CLI(iHeart):
 					plen = len(pl[s])
 					plen_comment = "tracks" if plen>1 else "track"
 					plen_disp = "[{} {}]".format(plen, plen_comment)
-				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s, plen_disp)
+				print("\t", app_msg_color(str(i)), ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
@@ -391,7 +388,7 @@ class iHeart_CLI(iHeart):
 					plen = len(pl[s])
 					plen_comment = "tracks" if plen>1 else "track"
 					plen_disp = "[{} {}]".format(plen, plen_comment)
-				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", s, plen_disp)
+				print("\t", app_msg_color(str(i)), ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
@@ -407,7 +404,7 @@ class iHeart_CLI(iHeart):
 		try:
 			print("Jump to track -")
 			for i, t in enumerate(self.station.track_list):
-				print("\t", Colors.colorize(str(i), Colors.YELLOW), ")", t)
+				print("\t", app_msg_color(str(i)), ")", t)
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
@@ -511,12 +508,12 @@ class iHeart_CLI(iHeart):
 					elif cmd == 'shuffle-playlist-toggle':
 						self.station.toggle_shuffle()
 						self.station.show_time(False)
-						print("Shuffle on" if self.station.shuffle else "Shuffle off")
+						print(app_msg_color("Shuffle on" if self.station.shuffle else "Shuffle off"))
 
 					elif cmd == 'repeat-track-toggle':
 						self.station.toggle_repeat()
 						self.station.show_time(False)
-						print("Repeat on" if self.station.repeat else "Repeat off")
+						print(app_msg_color("Repeat on" if self.station.repeat else "Repeat off"))
 
 					elif cmd == 'information':
 						printjson(self.station.info())
@@ -553,7 +550,7 @@ def main():
 	group.add_argument("-s", "--song", help="search Song radio with provided song name")
 	group.add_argument("-l", "--live", help="search Live radio with provided station name")
 	group.add_argument("-p", "--playlist", help="play selected local playlist (exact name required)")
-	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works if --playlist is specified)", action='store_true')
+	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works while --playlist is specified)", action='store_true')
 
 	args = parser.parse_args()
 

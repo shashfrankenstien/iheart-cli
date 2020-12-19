@@ -17,7 +17,7 @@ It implements a cross platform iHeartRadio console client in Python, only plays 
 
 ## Dependencies
 
-This project does not implement a player. It uses VLC for cross platform audio playback. It can be installed from the [VLC website](https://www.videolan.org)
+This project does not implement an audio player. It uses VLC for cross platform audio playback. It can be installed from the [VLC website](https://www.videolan.org)
 
 
 ## Installation/Usage
@@ -26,6 +26,11 @@ $ git clone https://github.com/shashfrankenstien/iHeart-cli.git
 $ cd iHeart-cli
 $ python3 -m pip install -r requirements.txt
 $ python3 -m iheart
+```
+
+View command line options help
+```shell
+$ python3 -m iheart --help
 ```
 
 ## TODO
