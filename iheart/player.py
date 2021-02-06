@@ -20,9 +20,14 @@ DEFAULT_UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 PRINT_PLAYING_URL = False
 
+VLC_INSTANCE_FLAGS = "--adaptive-use-access"
+if sys.platform.startswith('linux'):
+	VLC_INSTANCE_FLAGS += " --aout alsa"
+
+
 def vlc_is_installed() -> bool:
 	try:
-		i = vlc.Instance("--adaptive-use-access") # Create a VLC instance
+		i = vlc.Instance(VLC_INSTANCE_FLAGS) # Create a VLC instance
 		i.release()
 		return True
 	except NameError:
@@ -73,7 +78,7 @@ class VLCPlayer(object):
 
 	def play(self):
 		self.stop()
-		self.inst = vlc.Instance("--adaptive-use-access") # Create a VLC instance
+		self.inst = vlc.Instance(VLC_INSTANCE_FLAGS) # Create a VLC instance
 		self.inst.log_unset()
 		ext = (self.mrl.rpartition(".")[2])[:3]
 		if ext in ['pls', 'm3u']:
