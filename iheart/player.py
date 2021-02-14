@@ -298,10 +298,11 @@ class Track(object):
 		s = '''Track: "{}" by "{}" on "{}"'''.format(
 			Colors.colorize(self.name, Colors.YELLOW, bold=True),
 			Colors.colorize(self.artist, Colors.LIGHT_BLUE, bold=True),
-			Colors.colorize(self.album, Colors.GREEN, bold=True)
+			Colors.colorize(self.album, Colors.GREEN, bold=True),
 		)
 		if self.version:
 			s += " [" + Colors.colorize(self.version, Colors.RED, bold=True) + "]"
+		s += Colors.colorize(f" ({self.minutes}:{self.seconds:02d})", Colors.GRAY) # add song duration
 		return s
 
 	def __repr__(self):

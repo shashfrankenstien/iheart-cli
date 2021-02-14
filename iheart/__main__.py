@@ -45,6 +45,14 @@ Type '?' during playback to show available commands.'''.format(__version__)
 WELCOME_MSG = app_msg_color(WELCOME_MSG)
 
 
+def _print_error(msg):
+	print(" {} {}".format(
+		Colors.colorize("x", Colors.RED, bold=True),
+		Colors.colorize(msg, Colors.GRAY, bold=False),
+	))
+
+
+
 class Playlist(ArtistStation):
 	'''Json stored playlist implementation using ArtistRadio'''
 	def __init__(self, playlist_dict):
@@ -318,6 +326,7 @@ class iHeart_CLI(iHeart):
 		try:
 			choice = input("Pick: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
+				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			else:
 				return cats_consts[int(choice)]
@@ -342,6 +351,7 @@ class iHeart_CLI(iHeart):
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
+				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			else:
 				return self.get_playlist_as_station(playlist_name=pl_names[int(choice)])
@@ -355,7 +365,7 @@ class iHeart_CLI(iHeart):
 			if keyword is None:
 				keyword = input("Search {}: ".format(self.CATEGORIES[category]))
 			if not keyword.strip():
-				raise Exception("No keyword found")
+				raise Exception("No keyword provided")
 			self.station_list = self.search(keyword.strip(), category=category)
 			return self.list_current_stations()
 		except Exception as e:
@@ -366,7 +376,8 @@ class iHeart_CLI(iHeart):
 	def list_current_stations(self):
 		try:
 			if len(self.station_list)==0:
-				raise Exception("No stations found")
+				_print_error("Nothing found")
+				raise Exception("Nothing found")
 			elif len(self.station_list)==1:
 				return self.station_list[0]
 			for i, s in enumerate(self.station_list):
@@ -374,6 +385,7 @@ class iHeart_CLI(iHeart):
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
+				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			else:
 				return self.station_list[int(choice)]
@@ -397,6 +409,7 @@ class iHeart_CLI(iHeart):
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
+				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			elif int(choice)==len(pl_names)-1:
 				new_pl = input("Name the new playlist: ").strip()
@@ -404,7 +417,7 @@ class iHeart_CLI(iHeart):
 					self.store.add_to_playlist(playlist_name=new_pl, track=self.station)
 					print(app_msg_color("+ {}".format(new_pl)))
 				else:
-					if self._debug: print("No playlist name provided!")
+					_print_error("No playlist name provided!")
 			else:
 				pl = pl_names[int(choice)]
 				self.store.add_to_playlist(playlist_name=pl, track=self.station)
@@ -433,6 +446,7 @@ class iHeart_CLI(iHeart):
 
 			choice = input("Choice: ").strip()
 			if not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
+				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			else:
 				self.station.jump_to(int(choice))
