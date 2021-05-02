@@ -430,14 +430,14 @@ class iHeart(object):
 	TRACKS = 'tracks'
 	ARTISTS = 'artists'
 	STATIONS = 'stations'
+	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in __main__.py
 
-	# other choices - Not implemented yet
-	ALBUMS = 'albums'
-	PLAYLISTS = 'playlists'
-	PODCASTS = "podcasts"
-	FEATURED_STATIONS = "featuredStations"
-	TALKSHOWS = "talkShows"
-	TALKTHEMES = "talkThemes"
+	# # other choices - Not implemented yet
+	# ALBUMS = 'albums'
+	# PODCASTS = "podcasts"
+	# FEATURED_STATIONS = "featuredStations"
+	# TALKSHOWS = "talkShows"
+	# TALKTHEMES = "talkThemes"
 
 	def __init__(self, uuid_store=DEFAULT_UUID_STORE, print_url=False):
 		self.user = client.ilogin(uuid_store=uuid_store)

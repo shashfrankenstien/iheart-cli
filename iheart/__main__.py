@@ -54,7 +54,7 @@ def _print_error(msg):
 
 
 class Playlist(ArtistStation):
-	'''Json stored playlist implementation using ArtistRadio'''
+	'''Json stored playlist implementation using ArtistRadio class'''
 	def __init__(self, playlist_dict):
 		self.__dict = playlist_dict
 		self.name = playlist_dict['name']
@@ -292,6 +292,7 @@ class iHeart_CLI(iHeart):
 			self.CONTROLS['j'] = 'jump-to-track' # Jump to track by index in playlist
 		elif isinstance(station, LiveStation):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
+			del self.CONTROLS['r'] # Cannot repeat track in live stations
 
 		self.CONTROLS.move_to_end('q') # make exit / quit the last option
 		self._station = station
