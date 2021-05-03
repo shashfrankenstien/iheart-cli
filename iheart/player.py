@@ -1,6 +1,7 @@
 import os, sys
 import vlc
 import time
+from datetime import timedelta
 import logging
 import traceback
 
@@ -231,10 +232,8 @@ class Station(object):
 	def _print_elapsed_time(self, event):
 		if event.elapsed is not None:
 			elapsed = int(event.elapsed)
-			h = elapsed // (60*60)
-			m = elapsed // 60
-			s = elapsed % 60
-			countdown = f"\t+{h:02d}:{m:02d}:{s:02d}\r"
+			hhmmss = str(timedelta(seconds=elapsed))
+			countdown = f"\t+{hhmmss}\r"
 			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def show_time(self, show=True):
