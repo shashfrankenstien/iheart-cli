@@ -4,6 +4,8 @@ from collections import OrderedDict, deque
 import json
 import random
 import argparse
+import time
+import vlc
 
 from iheart import (
 	__version__,
@@ -107,6 +109,48 @@ class Playlist(ArtistStation):
 					break
 
 
+
+class aNONradio(Station):
+
+	def __init__(self):
+		station_dict = {
+			'id': 'aNON',
+			'user_id': 'aNON',
+			'name': 'aNONradio.net',
+			'mrl': "http://anonradio.net:8000/anonradio"
+		}
+		super().__init__(station_dict)
+
+	def __str__(self):
+		player = self.get_player()
+		if player.is_playing():
+			media = player.plr.get_media()
+			if not media.is_parsed():
+				media.parse()
+			desc = '"{}" on "{}"'.format(
+				Colors.colorize(str(media.get_meta(vlc.Meta.NowPlaying)), Colors.YELLOW, bold=True),
+				Colors.colorize(str(media.get_meta(vlc.Meta.Title)), Colors.GREEN, bold=True),
+			)
+		else:
+			desc = Colors.colorize(self.mrl, Colors.BLUE, bold=True)
+		decor = Colors.colorize("**", Colors.RED)
+		return "{} {}: {} {}".format(
+			decor,
+			Colors.colorize(self.name, Colors.CYAN, bold=True),
+			desc,
+			decor
+		)
+
+	def forward(self):
+		# disable forwarding
+		pass
+
+	def rewind(self):
+		# disable rewinding
+		pass
+
+
+
 class iHeart_Storage(object):
 
 	DATA = {
@@ -121,7 +165,9 @@ class iHeart_Storage(object):
 		LiveStation.__name__: LiveStation,
 		SongStation.__name__: SongStation,
 		Station.__name__: Station,
-		Playlist.__name__: Playlist
+
+		Playlist.__name__: Playlist,
+		aNONradio.__name__: aNONradio,
 	}
 
 	def __init__(self, configdir, debug=False):
@@ -200,7 +246,7 @@ class iHeart_Storage(object):
 
 	def update_last_played(self, track):
 		if not isinstance(track, dict):
-			 track = self.station_to_dict(track)
+			track = self.station_to_dict(track)
 		self.DATA['last_played'] = track
 
 	def add_to_playlist(self, playlist_name, track):
@@ -223,11 +269,16 @@ class ExitException(Exception):
 
 class iHeart_CLI(iHeart):
 
+	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in __main__.py
+	ANON = 'aNONradio'
+
 	CATEGORIES = OrderedDict({
 		iHeart.ARTISTS: 'Artist Radio',
 		iHeart.TRACKS: 'Song Radio',
 		iHeart.STATIONS: "Live Radio",
-		iHeart.PLAYLISTS: 'Playlists',
+		# non-iheart station types
+		PLAYLISTS: 'Playlists',
+		ANON: 'aNONradio.net',
 	})
 
 	COMMON_CONTROLS = OrderedDict({
@@ -266,14 +317,16 @@ class iHeart_CLI(iHeart):
 	def category(self):
 		# category getter to convert current station to it's category
 		if isinstance(self.station, LiveStation):
-			return iHeart.STATIONS
+			return self.STATIONS
 		# ArtistStation should be checked for after checking for it's subclasses - SongStation and Playlist
 		elif isinstance(self.station, SongStation):
-			return iHeart.TRACKS
+			return self.TRACKS
 		elif isinstance(self.station, Playlist):
-			return iHeart.PLAYLISTS
+			return self.PLAYLISTS
 		elif isinstance(self.station, ArtistStation):
-			return iHeart.ARTISTS
+			return self.ARTISTS
+		elif isinstance(self.station, aNONradio):
+			return self.ANON
 		else:
 			return None
 
@@ -293,6 +346,12 @@ class iHeart_CLI(iHeart):
 		elif isinstance(station, LiveStation):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
 			del self.CONTROLS['r'] # Cannot repeat track in live stations
+		elif isinstance(station, aNONradio):
+			del self.CONTROLS['+'] # Cannot add live stations to playlists
+			del self.CONTROLS['r'] # Cannot repeat track in aNONradio stations
+			del self.CONTROLS['s'] # Cannot search track in aNONradio stations
+			del self.CONTROLS['l'] # Cannot list last search in aNONradio stations
+			del self.CONTROLS['n'] # Cannot forward / go next in aNONradio stations
 
 		self.CONTROLS.move_to_end('q') # make exit / quit the last option
 		self._station = station
@@ -303,7 +362,10 @@ class iHeart_CLI(iHeart):
 		if category is None:
 			category = self.choose_category(force=force)
 
-		if category == iHeart.PLAYLISTS:
+		if category == self.ANON:
+			return aNONradio()
+
+		elif category == self.PLAYLISTS:
 			# highjacking playlist category for Json stored implementation
 			return self.choose_playlist()
 		else:
@@ -314,19 +376,19 @@ class iHeart_CLI(iHeart):
 		print("Pick a category -")
 		pl = self.store.get_playlists()
 		playlist_count = len(pl)
-		cats = []
+		cat_names = []
 		cats_consts = []
 		for c in self.CATEGORIES:
-			if c==iHeart.PLAYLISTS and playlist_count==0:
+			if c==self.PLAYLISTS and playlist_count==0:
 				continue
 			cats_consts.append(c)
-			cats.append(self.CATEGORIES[c])
+			cat_names.append(self.CATEGORIES[c])
 
-		for i, s in enumerate(cats):
+		for i, s in enumerate(cat_names):
 			print("\t", app_msg_color(str(i)), ")", s)
 		try:
 			choice = input("Pick: ").strip()
-			if not choice or not choice.isnumeric() or int(choice)>=len(cats):
+			if not choice or not choice.isnumeric() or int(choice)>=len(cat_names):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			else:
@@ -501,7 +563,7 @@ class iHeart_CLI(iHeart):
 
 					elif cmd == 'print-current':
 						self.station.show_time(False)
-						if isinstance(self.station, LiveStation):
+						if isinstance(self.station, (LiveStation, aNONradio)):
 							print(self.station)
 						else:
 							print(self.station.current_track)
@@ -584,6 +646,7 @@ def main():
 	group.add_argument("-l", "--live", help="search Live radio with provided station name")
 	group.add_argument("-p", "--playlist", help="play selected local playlist (exact name required)")
 	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works while --playlist is specified)", action='store_true')
+	group.add_argument("--anon", help="play aNONradio.net", action="store_true")
 
 	args = parser.parse_args()
 
@@ -601,20 +664,24 @@ def main():
 
 	# setup category and search term if provided
 	if args.artist is not None:
-		category = iHeart.ARTISTS
+		category = iHeart_CLI.ARTISTS
 		search_term = args.artist
 
 	elif args.song is not None:
-		category = iHeart.TRACKS
+		category = iHeart_CLI.TRACKS
 		search_term = args.song
 
 	elif args.live is not None:
-		category = iHeart.STATIONS
+		category = iHeart_CLI.STATIONS
 		search_term = args.live
 
 	elif args.playlist is not None:
-		category = iHeart.PLAYLISTS
+		category = iHeart_CLI.PLAYLISTS
 		search_term = args.playlist
+
+	elif args.anon is not None:
+		category = iHeart_CLI.ANON
+		search_term = None
 
 	else:
 		category = None
@@ -632,7 +699,7 @@ def main():
 		# Welcome message
 		print(WELCOME_MSG)
 		radio = iHeart_CLI(configdir, debug=args.debug)
-		if category == iHeart.PLAYLISTS:
+		if category == iHeart_CLI.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)
 			if radio.station is not None and args.shuffle == True:

@@ -15,6 +15,8 @@ The project is a cross platform iHeartRadio console client implemented in Python
     - Each playlist is saved as a separate json file and can be freely copied between machines
     - Play songs in a playlist sequentially or on shuffle
 
+* Play [aNONradio](https://anonradio.net/)
+
 ## Dependencies
 
 This project does not implement an audio player. It uses VLC for cross platform audio playback. It can be installed from the [VLC website](https://www.videolan.org)

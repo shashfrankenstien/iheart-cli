@@ -4,8 +4,13 @@ import time
 import logging
 import traceback
 
-from .colors import Colors
-from . import client
+if __name__=='__main__':
+	# setup imports to be able to run test functions at the end of this file
+	from colors import Colors # pylint: disable=import-error
+	import client
+else:
+	from .colors import Colors
+	from . import client
 
 
 
@@ -55,6 +60,8 @@ class VLCPlayer(object):
 		self._manager = None
 		self._events_registry = {}
 
+		self._play_start_time = None
+
 	@classmethod
 	def get_player(cls, mrl):
 		if cls._PLAYER is None:
@@ -71,10 +78,23 @@ class VLCPlayer(object):
 			return self.plr
 
 	def register_event(self, event_type, callback):
+		def _callback_wrapper(event):
+			# add event.elapsed - time since play was called
+			if self._play_start_time is not None:
+				event.elapsed = time.time() - self._play_start_time
+			else:
+				event.elapsed = None
+			callback(event)
 		if self._manager is not None:
-			self._manager.event_attach(event_type, callback)
+			self._manager.event_attach(event_type, _callback_wrapper)
 		else:
-			self._events_registry[event_type] = callback
+			self._events_registry[event_type] = _callback_wrapper
+
+	def remove_event(self, event_type):
+		if self._manager is not None:
+			self._manager.event_detach(event_type)
+		if event_type in self._events_registry:
+			del self._events_registry[event_type]
 
 	def play(self):
 		self.stop()
@@ -94,6 +114,7 @@ class VLCPlayer(object):
 			self.list_player = False
 			# print("playing>")
 
+		self._play_start_time = time.time()
 		self._manager = self.get_internal_player().event_manager()
 		# apply cached events that were registered before _manager was created
 		for evt, cb in self._events_registry.items():
@@ -117,6 +138,7 @@ class VLCPlayer(object):
 			self.inst.release()
 			self.inst = None
 		self._manager = None
+		self._play_start_time = None
 
 	def forward(self):
 		"""Go forward 10 secs"""
@@ -146,48 +168,80 @@ class Station(object):
 		self.id = self.__dict['id']
 		self.user_id = self.__dict['user_id']
 		self.mrl = self.__dict.get('mrl', None)
+		self.name = self.__dict.get('name') or self.__class__.__name__
 
 	def get_dict(self):
 		return self.__dict
 
 	def __str__(self):
-		return "<station:{}:{}>".format(self.id, self.mrl)
+		decor = Colors.colorize("**", Colors.RED)
+		return "{} {}: {} ({}) {}".format(
+			decor,
+			self.__class__.__name__,
+			Colors.colorize(self.name, Colors.CYAN, bold=True),
+			Colors.colorize(self.mrl, Colors.BLUE, bold=True),
+			decor
+		)
 
 	def __repr__(self):
 		return str(self)
 
+	def get_player(self):
+		return VLCPlayer.get_player(self.mrl)
+
 	def play(self):
 		if self.mrl is not None:
-			VLCPlayer.get_player(self.mrl).play()
+			player = self.get_player()
+			player.play()
+			# media url might take a bit to load. while loading, is_playing returns False.
+			# - sleeping a bit to allow time for the player to load the url and start playing
+			# - timeout this wait at 10 seconds
+			st = time.time()
+			while not player.is_playing() and time.time()-st < 10:
+				time.sleep(0.5)
+			if not player.is_playing():
+				raise TimeoutError("could not play {}".format(self.mrl))
+
 
 	def toggle_pause(self, pause=True):
 		if self.mrl is not None:
-			return VLCPlayer.get_player(self.mrl).toggle_pause(pause=pause)
+			return self.get_player().toggle_pause(pause=pause)
 
 	def stop(self):
 		if self.mrl is not None:
-			VLCPlayer.get_player(self.mrl).stop()
+			self.get_player().stop()
 
 	def is_playing(self):
-		return self.mrl is not None and VLCPlayer.get_player(self.mrl).is_playing()
+		return self.mrl is not None and self.get_player().is_playing()
 
 	def is_paused(self):
-		return self.mrl is not None and VLCPlayer.get_player(self.mrl).is_paused()
+		return self.mrl is not None and self.get_player().is_paused()
 
 	def forward(self):
 		if self.mrl is not None:
-			VLCPlayer.get_player(self.mrl).forward()
+			self.get_player().forward()
 
 	def rewind(self):
 		if self.mrl is not None:
-			VLCPlayer.get_player(self.mrl).forward()
+			self.get_player().forward()
 
 	def info(self):
 		return {'mrl': self.mrl, 'id': self.id}
 
-	def show_time(self, show=True):
-		pass
+	def _print_elapsed_time(self, event):
+		if event.elapsed is not None:
+			elapsed = int(event.elapsed)
+			h = elapsed // (60*60)
+			m = elapsed // 60
+			s = elapsed % 60
+			countdown = f"\t+{h:02d}:{m:02d}:{s:02d}\r"
+			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
+	def show_time(self, show=True):
+		if show:
+			self.get_player().register_event(VLCPlayer.POSITION_CHANGED, self._print_elapsed_time)
+		else:
+			self.get_player().remove_event(VLCPlayer.POSITION_CHANGED)
 
 
 
@@ -195,8 +249,7 @@ class LiveStation(Station):
 	def __init__(self, station_dict):
 		super().__init__(station_dict=station_dict)
 		self.__dict = station_dict
-		# self.id = station_dict['id']
-		self.name = self.__dict.get('name')
+
 		self.description = (self.__dict.get('description') or '').strip()
 		self.callLetters = self.__dict.get('callLetters')
 		self.frequency = self.__dict.get('frequency')
@@ -241,7 +294,7 @@ class LiveStation(Station):
 			Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
 			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False) if PRINT_PLAYING_URL else ''
 		))
-		player = VLCPlayer.get_player(self.mrl)
+		player = self.get_player()
 		player.play()
 
 	def toggle_pause(self, pause=True):
@@ -343,7 +396,6 @@ class ArtistStation(Station):
 	def __init__(self, artist_dict):
 		super().__init__(station_dict=artist_dict)
 		self.__dict = artist_dict
-		self.name = self.__dict.get('name')
 		self.imageUrl = self.__dict.get('image')
 
 		self.search_score = self.__dict.get('score')
@@ -430,9 +482,9 @@ class iHeart(object):
 	TRACKS = 'tracks'
 	ARTISTS = 'artists'
 	STATIONS = 'stations'
-	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in __main__.py
 
 	# # other choices - Not implemented yet
+	# PLAYLISTS = 'playlists'
 	# ALBUMS = 'albums'
 	# PODCASTS = "podcasts"
 	# FEATURED_STATIONS = "featuredStations"
@@ -516,6 +568,7 @@ if __name__ == "__main__":
 		# printjson(iget_track_info(res1['id']))
 
 
+	test_player()
 	test_track_search()
 	test_artist_radio()
 
