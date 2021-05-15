@@ -679,7 +679,7 @@ def main():
 		category = iHeart_CLI.PLAYLISTS
 		search_term = args.playlist
 
-	elif args.anon is not None:
+	elif args.anon is True:
 		category = iHeart_CLI.ANON
 		search_term = None
 
