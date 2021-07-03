@@ -26,7 +26,7 @@ DEFAULT_UUID_STORE = os.path.join(CWD, "iheart.uuid")
 
 PRINT_PLAYING_URL = False
 
-VLC_INSTANCE_FLAGS = "--adaptive-use-access"
+VLC_INSTANCE_FLAGS = "--network-caching=50000 --adaptive-use-access"
 if sys.platform.startswith('linux'):
 	VLC_INSTANCE_FLAGS += " --aout alsa"
 
@@ -365,7 +365,7 @@ class Track(object):
 
 	def _print_remaining_duration(self, event):
 		if self.__show_time:
-			remaining = int((1-event.u.new_position) * self.length)
+			remaining = int(self.length - event.elapsed)
 			m = remaining // 60
 			s = (remaining % 60)
 			countdown = f"\t-{m:02d}:{s:02d}/{self.minutes:02d}:{self.seconds:02d}\r"

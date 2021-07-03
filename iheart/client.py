@@ -37,7 +37,7 @@ HEADERS = {
 	"X-Locale": "en-US",
 	"Origin": "https://www.iheart.com",
 	"DNT": "1",
-	"Connection": "keep-alive"
+	# "Connection": "keep-alive"
 }
 
 
