@@ -388,11 +388,12 @@ class iHeart_CLI(iHeart):
 			print("\t", app_msg_color(str(i)), ")", s)
 		try:
 			choice = input("Pick: ").strip()
-			if not choice or not choice.isnumeric() or int(choice)>=len(cat_names):
+			if choice == '':
+				choice = 0 # default choice
+			elif not choice or not choice.isnumeric() or int(choice)>=len(cat_names):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
-			else:
-				return cats_consts[int(choice)]
+			return cats_consts[int(choice)]
 		except Exception as e:
 			if self._debug: print(e)
 			if force:
@@ -413,11 +414,12 @@ class iHeart_CLI(iHeart):
 				print("\t", app_msg_color(str(i)), ")", s, plen_disp)
 
 			choice = input("Choice: ").strip()
-			if not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
+			if choice == '':
+				choice = 0 # default choice
+			elif not choice or not choice.isnumeric() or int(choice)>=len(pl_names):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
-			else:
-				return self.get_playlist_as_station(playlist_name=pl_names[int(choice)])
+			return self.get_playlist_as_station(playlist_name=pl_names[int(choice)])
 		except Exception as e:
 			if self._debug: print(e)
 			return None
@@ -447,11 +449,12 @@ class iHeart_CLI(iHeart):
 				print("\t", app_msg_color(str(i)), ")", s.name)
 
 			choice = input("Choice: ").strip()
-			if not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
+			if choice == '':
+				choice = 0 # default choice
+			elif not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
-			else:
-				return self.station_list[int(choice)]
+			return self.station_list[int(choice)]
 		except Exception as e:
 			if self._debug: print(e)
 			return None
@@ -508,11 +511,12 @@ class iHeart_CLI(iHeart):
 				print("\t", app_msg_color(str(i)), ")", t)
 
 			choice = input("Choice: ").strip()
-			if not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
+			if choice == '':
+				choice = 0 # default choice
+			elif not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
-			else:
-				self.station.jump_to(int(choice))
+			self.station.jump_to(int(choice))
 		except Exception as e:
 			if self._debug: print(e)
 
