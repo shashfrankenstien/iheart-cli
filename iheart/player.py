@@ -62,6 +62,8 @@ class VLCPlayer(object):
 		self._events_registry = {}
 
 		self._play_start_time = None
+		self._paused_at = None
+		self._total_paused_time = 0
 
 	@classmethod
 	def get_player(cls, mrl):
@@ -82,7 +84,7 @@ class VLCPlayer(object):
 		def _callback_wrapper(event):
 			# add event.elapsed - time since play was called
 			if self._play_start_time is not None:
-				event.elapsed = time.time() - self._play_start_time
+				event.elapsed = time.time() - self._play_start_time - self._total_paused_time
 			else:
 				event.elapsed = None
 			callback(event)
@@ -140,6 +142,8 @@ class VLCPlayer(object):
 			self.inst = None
 		self._manager = None
 		self._play_start_time = None
+		self._paused_at = None
+		self._total_paused_time = 0
 
 	def forward(self):
 		"""Go forward 10 secs"""
@@ -154,6 +158,10 @@ class VLCPlayer(object):
 	def toggle_pause(self, pause=True):
 		self.plr.set_pause(1 if pause else 0)
 		self._paused = pause
+		if pause is True:
+			self._paused_at = time.time()
+		elif self._paused_at is not None:
+			self._total_paused_time += time.time() - self._paused_at
 		time.sleep(0.1)
 		return self.is_playing()
 		# return self.plr.get_state()
