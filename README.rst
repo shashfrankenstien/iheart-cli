@@ -32,15 +32,15 @@ Installation/Usage
 
 Using pip - `Great read <https://matthew-brett.github.io/pydagogue/installing_scripts.html>`_
 
-.. code:: shell
+.. code::
 
-    $ pip install -U git+https://github.com/shashfrankenstien/iheart-cli.git
+    $ pip install -U iheart-cli
     $ iheart
 
 
 From repository
 
-.. code:: shell
+.. code::
 
     $ git clone https://github.com/shashfrankenstien/iheart-cli.git
     $ cd iHeart-cli
