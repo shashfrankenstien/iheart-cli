@@ -16,6 +16,7 @@ Features
 * Play Live and Artist radio stations
 * Play Song radio stations (Which are essentially Artist stations, but created using song names)
 * Save song urls into local playlists maintained as json files
+
     - Each playlist is saved as a separate json file and can be freely copied between machines
     - Play songs in a playlist sequentially or on shuffle
 
