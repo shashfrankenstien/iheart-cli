@@ -41,7 +41,7 @@ wipeline = lambda:sys.stdout.write("\33[2K\r")
 app_msg_color = lambda m: Colors.colorize(m, Colors.YELLOW, bold=False)
 
 
-WELCOME_MSG = '''Welcome to iHeart cli player ({})!
+WELCOME_MSG = '''Welcome to iHeart cli player (v{})!
 Type '?' during playback to show available commands.'''.format(__version__)
 
 WELCOME_MSG = app_msg_color(WELCOME_MSG)
@@ -431,33 +431,54 @@ class iHeart_CLI(iHeart):
 				keyword = input("Search {}: ".format(self.CATEGORIES[category]))
 			if not keyword.strip():
 				raise Exception("No keyword provided")
-			self.station_list = self.search(keyword.strip(), category=category)
-			return self.list_current_stations()
+			return self.list_current_stations(getter=lambda startIndex:self.search(keyword.strip(), category=category, startIndex=startIndex))
 		except Exception as e:
 			if self._debug: print(e)
-			return None
+		return None
 
 
-	def list_current_stations(self):
+	def list_current_stations(self, getter=None):
 		try:
-			if len(self.station_list)==0:
-				_print_error("Nothing found")
-				raise Exception("Nothing found")
-			elif len(self.station_list)==1:
-				return self.station_list[0]
-			for i, s in enumerate(self.station_list):
-				print("\t", app_msg_color(str(i)), ")", s.name)
+			new_search = (getter is not None)
+			is_playing = self.station is not None and self.station.is_playing()
+			if new_search:
+				msg = "Enter 'm' to list more results."
+				if not is_playing:
+					msg += "\nPress Enter key to select choice 0."
+				print(app_msg_color(msg))
+				self.station_list = []
 
-			choice = input("Choice: ").strip()
-			if choice == '':
-				choice = 0 # default choice
-			elif not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
-				_print_error("Invalid choice!")
-				raise Exception("Invalid choice!")
-			return self.station_list[int(choice)]
+			while True:
+				cur_st_len = len(self.station_list)
+				if new_search:
+					to_print = getter(cur_st_len)
+					self.station_list += to_print
+				else:
+					if cur_st_len==0:
+						_print_error("Nothing found")
+						raise Exception("Nothing found")
+					elif cur_st_len==1:
+						return self.station_list[0]
+					to_print = self.station_list
+
+				for i, s in enumerate(to_print):
+					idx = i
+					if new_search:
+						idx += cur_st_len
+					print("\t", app_msg_color(str(idx)), ")", s.name)
+
+				choice = input("Choice: ").strip()
+				if choice == '' and not is_playing:
+					choice = 0 # default choice if not playing anything
+				elif choice == 'm' and new_search:
+					continue # calls getter again
+				elif not choice or not choice.isnumeric() or int(choice)>=len(self.station_list):
+					_print_error("Invalid choice!")
+					raise Exception("Invalid choice!")
+				return self.station_list[int(choice)]
 		except Exception as e:
 			if self._debug: print(e)
-			return None
+		return None
 
 
 	def add_to_playlist(self):
@@ -501,7 +522,7 @@ class iHeart_CLI(iHeart):
 			return Playlist(pl_dict)
 		except Exception as e:
 			if self._debug: print(e)
-			return None
+		return None
 
 
 	def playlist_jump_to_track(self):

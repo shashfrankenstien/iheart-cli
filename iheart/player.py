@@ -504,9 +504,9 @@ class iHeart(object):
 		global PRINT_PLAYING_URL
 		PRINT_PLAYING_URL = print_url
 
-	def search(self, keyword, category=None):
+	def search(self, keyword, category=None, startIndex=0):
 		if category is None: category = self.ARTISTS
-		search_res = client.isearch(keyword)
+		search_res = client.isearch(keyword, startIndex=startIndex)
 
 		if category==self.STATIONS:
 			station_class = LiveStation

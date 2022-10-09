@@ -93,11 +93,11 @@ def iget_market_id(zipCode):
 	return requests.get(markets_url.format(zipCode=zipCode), headers=HEADERS).json()['hits'][0]
 
 
-def isearch(keyword, limit=20, marketId=159):
+def isearch(keyword, startIndex=0, maxRows=10, marketId=159):
 	res = requests.get(search_url, params={
 		'boostMarketId': marketId,
-		'maxRows':limit,
-		'bundle':True,
+		'startIndex':startIndex,
+		'maxRows':maxRows,
 		'keyword':True,
 		'keywords': keyword,
 	}, headers=HEADERS)
