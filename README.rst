@@ -36,7 +36,7 @@ Using pip - `Great read <https://matthew-brett.github.io/pydagogue/installing_sc
 .. code::
 
     $ pip install -U iheart-cli
-    $ iheart
+    $ iheart --help
 
 
 From repository
@@ -45,15 +45,8 @@ From repository
 
     $ git clone https://github.com/shashfrankenstien/iheart-cli.git
     $ cd iHeart-cli
-    $ python3 -m pip install .
-    $ iheart
+    $ python3 -m iheart --help
 
-
-View command line options help
-
-.. code:: shell
-
-    $ iheart --help
 
 
 TODO

@@ -39,6 +39,7 @@ except ImportError:
 printjson = lambda j: print(json.dumps(j, indent=4))
 wipeline = lambda:sys.stdout.write("\33[2K\r")
 app_msg_color = lambda m: Colors.colorize(m, Colors.YELLOW, bold=False)
+app_critical_color = lambda m: Colors.colorize(m, Colors.RED, bold=False)
 
 
 WELCOME_MSG = '''Welcome to iHeart cli player (v{})!
@@ -81,6 +82,13 @@ class Playlist(ArtistStation):
 			self.now_playing_id = new_track.id
 			yield new_track
 			self.tracks_to_play.rotate(-1) # rotate left to go to next track
+
+	def remove_track(self, track_id):
+		def filter_func(t):
+			return t.id != track_id
+		self.track_list = deque(filter(filter_func, self.track_list))
+		self.tracks_to_play = deque(filter(filter_func, self.tracks_to_play))
+
 
 	def toggle_shuffle(self):
 		self.shuffle = not self.shuffle
@@ -248,14 +256,23 @@ class iHeart_Storage(object):
 		if not isinstance(track, dict):
 			track = self.station_to_dict(track)
 		self.DATA['last_played'] = track
+		self.write()
 
 	def add_to_playlist(self, playlist_name, track):
 		if not isinstance(track, dict):
 			track = self.current_track_to_dict(track)
 		if playlist_name not in self.DATA['playlists']:
 			self.DATA['playlists'][playlist_name] = OrderedDict()
-		if track['__id__'] not in self.DATA['playlists'][playlist_name]:
-			self.DATA['playlists'][playlist_name][track['__id__']] = track #__id__ is unique iheart id
+		track_id = str(track['__id__']) # json.dump automatically converts keys to strings. make it explicit!
+		if track_id not in self.DATA['playlists'][playlist_name]:
+			self.DATA['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
+		self.write()
+
+	def delete_from_playlist_by_id(self, playlist_name, track_id):
+		track_id = str(track_id) # json.dump automatically converts keys to strings. make it explicit!
+		if playlist_name in self.DATA['playlists'] and track_id in self.DATA['playlists'][playlist_name]:
+			del self.DATA['playlists'][playlist_name][track_id]
+			self.write()
 
 	def get_playlists(self):
 		return self.DATA['playlists']
@@ -343,6 +360,7 @@ class iHeart_CLI(iHeart):
 			self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
 			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
 			self.CONTROLS['j'] = 'jump-to-track' # Jump to track by index in playlist
+			self.CONTROLS['d'] = 'delete-from-playlist' # Delete track from playlist
 		elif isinstance(station, LiveStation):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
 			del self.CONTROLS['r'] # Cannot repeat track in live stations
@@ -509,10 +527,30 @@ class iHeart_CLI(iHeart):
 				pl = pl_names[int(choice)]
 				self.store.add_to_playlist(playlist_name=pl, track=self.station)
 				print(app_msg_color("+ {}".format(pl)))
-			self.store.write()
 
 		except Exception as e:
 			if self._debug: print(e)
+
+
+	def delete_from_playlist(self):
+		'''deletes current track from playlist'''
+		if not isinstance(self.station, Playlist) or self.station.now_playing_id is None: # only works if current station is a playlist
+			return None
+		try:
+			choice = input(app_msg_color(f"Delete current track from '{self.station.name}'? (y/n): ")).strip()
+			if choice not in ('y','n'):
+				_print_error("Invalid choice!")
+				return None
+
+			if choice == 'y':
+				print(app_critical_color("- {}".format(self.station.name)))
+				cur_track_id = self.station.now_playing_id
+				self.station.forward() # first move to next track since we'll be deleting current track
+				self.store.delete_from_playlist_by_id(playlist_name=self.station.name, track_id=cur_track_id)
+				self.station.remove_track(cur_track_id)
+		except Exception as e:
+			if self._debug: print(e)
+		return None
 
 
 	def get_playlist_as_station(self, playlist_name):
@@ -573,7 +611,6 @@ class iHeart_CLI(iHeart):
 					print(self.station)
 					self.station.play()
 					self.store.update_last_played(self.station)
-					self.store.write()
 					continue # This will restart the while loop to make sure everything is set correctly
 
 				while True: # start key-press loop
@@ -648,6 +685,9 @@ class iHeart_CLI(iHeart):
 						self.station.show_time(False)
 						self.add_to_playlist()
 
+					elif cmd == 'delete-from-playlist':
+						self.station.show_time(False)
+						self.delete_from_playlist()
 		except:
 			self._debug: traceback.print_exc()
 			raise
