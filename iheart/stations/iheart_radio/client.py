@@ -55,12 +55,12 @@ def _generic_get(url):
 # **************************************************************************************
 
 
-def ilogin(uuid_store):
+def ilogin(uuid_filepath):
 	global HEADERS
 	accessToken = 'anon'
 	uu = ''
-	if os.path.isfile(uuid_store):
-		with open(uuid_store, 'r') as u:
+	if os.path.isfile(uuid_filepath):
+		with open(uuid_filepath, 'r') as u:
 			uu = u.read()
 	if not uu:
 		uu = str(uuid.uuid1())
@@ -75,7 +75,7 @@ def ilogin(uuid_store):
 	}
 	res = requests.post(new_user_url, data=body, headers=HEADERS)
 	try:
-		with open(uuid_store, 'w') as u:
+		with open(uuid_filepath, 'w') as u:
 			u.write(uu)
 		user = res.json()
 		HEADERS.update({

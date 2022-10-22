@@ -1,23 +1,25 @@
 import os, sys
 import traceback
-from collections import OrderedDict, deque
+from collections import OrderedDict
 import json
-import random
 import argparse
-import time
-import vlc
 
-from iheart import (
-	__version__,
-	vlc_is_installed,
-	iHeart,
-	Track,
-	Station,
+
+from .stations import (
+	Station, # base class
 	LiveStation,
 	SongStation,
 	ArtistStation,
+	Playlist,
+
+	aNONradio
 )
-from iheart.colors import Colors
+
+from .stations.iheart_radio import client as iheart_client
+
+from .player import vlc_is_installed
+from .colors import Colors
+from . import __version__
 
 
 try:
@@ -48,114 +50,20 @@ Type '?' during playback to show available commands.'''.format(__version__)
 WELCOME_MSG = app_msg_color(WELCOME_MSG)
 
 
+CONFIGDIR = os.path.join(
+	os.environ.get('APPDATA') or
+	os.environ.get('XDG_CONFIG_HOME') or
+	os.path.join(os.environ['HOME'], '.config'),
+	"iheartcli"
+)
+if not os.path.isdir(CONFIGDIR): os.makedirs(CONFIGDIR)
+
+
 def _print_error(msg):
 	print(" {} {}".format(
 		Colors.colorize("x", Colors.RED, bold=True),
 		Colors.colorize(msg, Colors.GRAY, bold=False),
 	))
-
-
-
-class Playlist(ArtistStation):
-	'''Json stored playlist implementation using ArtistRadio class'''
-	def __init__(self, playlist_dict):
-		self.__dict = playlist_dict
-		self.name = playlist_dict['name']
-		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
-		self.track_list = deque([Track(trk_dict) for trk_dict in playlist_dict['track_dict_list']]) # deque so as to use rotate
-		self.tracks_to_play = self.track_list.copy() # make copy to implement shuffle
-		self.shuffle = False
-		self.now_playing_id = None
-
-	def get_dict(self):
-		return self.__dict
-
-	def __str__(self):
-		return "<Playlist: {}> {}".format(
-			Colors.colorize(self.id, Colors.CYAN),
-			Colors.colorize("[Shuffle]", Colors.PINK) if self.shuffle else '',
-		)
-
-	def iter_tracks(self):
-		while True:
-			new_track = self.tracks_to_play[0]
-			self.now_playing_id = new_track.id
-			yield new_track
-			self.tracks_to_play.rotate(-1) # rotate left to go to next track
-
-	def remove_track(self, track_id):
-		def filter_func(t):
-			return t.id != track_id
-		self.track_list = deque(filter(filter_func, self.track_list))
-		self.tracks_to_play = deque(filter(filter_func, self.tracks_to_play))
-
-
-	def toggle_shuffle(self):
-		self.shuffle = not self.shuffle
-		if self.shuffle:
-			random.shuffle(self.tracks_to_play) # shuffle playlist
-		else: # shuffle off
-			# if there is a song playing in shuffle mode,
-			# rotate tracklist such that the playlist continues from the current track
-			current_idx = 0
-			if self.now_playing_id is not None:
-				for i, t in enumerate(self.track_list):
-					if t.id==self.now_playing_id:
-						current_idx = i
-						break
-
-			self.tracks_to_play = self.track_list.copy() # make copy of original track list
-			self.tracks_to_play.rotate(-1*current_idx) # rotate left to current track
-
-	def jump_to(self, idx):
-		if idx < len(self.track_list):
-			track = self.track_list[idx]
-			for i, t in enumerate(self.tracks_to_play):
-				if t.id==track.id:
-					self.tracks_to_play.rotate(-1*(i-1)) # rotate left so that selected track will play next
-					self.forward() # then trigger jump to next song
-					break
-
-
-
-class aNONradio(Station):
-
-	def __init__(self):
-		station_dict = {
-			'id': 'aNON',
-			'user_id': 'aNON',
-			'name': 'aNONradio.net',
-			'mrl': "http://anonradio.net:8000/anonradio"
-		}
-		super().__init__(station_dict)
-
-	def __str__(self):
-		player = self.get_player()
-		if player.is_playing():
-			media = player.plr.get_media()
-			if not media.is_parsed():
-				media.parse()
-			desc = '"{}" on "{}"'.format(
-				Colors.colorize(str(media.get_meta(vlc.Meta.NowPlaying)), Colors.YELLOW, bold=True),
-				Colors.colorize(str(media.get_meta(vlc.Meta.Title)), Colors.GREEN, bold=True),
-			)
-		else:
-			desc = Colors.colorize(self.mrl, Colors.BLUE, bold=True)
-		decor = Colors.colorize("**", Colors.RED)
-		return "{} {}: {} {}".format(
-			decor,
-			Colors.colorize(self.name, Colors.CYAN, bold=True),
-			desc,
-			decor
-		)
-
-	def forward(self):
-		# disable forwarding
-		pass
-
-	def rewind(self):
-		# disable rewinding
-		pass
 
 
 
@@ -284,6 +192,51 @@ class ExitException(Exception):
 	pass
 
 
+
+
+class iHeart(object):
+
+	TRACKS = 'tracks'
+	ARTISTS = 'artists'
+	STATIONS = 'stations'
+
+	# # other choices - Not implemented yet
+	# PLAYLISTS = 'playlists'
+	# ALBUMS = 'albums'
+	# PODCASTS = "podcasts"
+	# FEATURED_STATIONS = "featuredStations"
+	# TALKSHOWS = "talkShows"
+	# TALKTHEMES = "talkThemes"
+
+	def __init__(self, uuid_filepath, print_url=False):
+		self.user = iheart_client.ilogin(uuid_filepath=uuid_filepath)
+		self.user_id = self.user['profileId']
+		global PRINT_PLAYING_URL
+		PRINT_PLAYING_URL = print_url
+
+	def search(self, keyword, category=None, startIndex=0):
+		if category is None: category = self.ARTISTS
+		search_res = iheart_client.isearch(keyword, startIndex=startIndex)
+
+		if category==self.STATIONS:
+			station_class = LiveStation
+		elif category==self.ARTISTS:
+			station_class = ArtistStation
+		elif category==self.TRACKS:
+			station_class = SongStation
+		else:
+			# return search_res['results'][category]
+			raise NotImplementedError("'{}' not implemented yet")
+
+		out = []
+		for result in search_res['results'][category]:
+			result['user_id'] = self.user_id
+			out.append(station_class(result))
+		return out
+
+
+
+
 class iHeart_CLI(iHeart):
 
 	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in __main__.py
@@ -317,7 +270,7 @@ class iHeart_CLI(iHeart):
 
 	def __init__(self, configdir, debug=False):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
-		super().__init__(uuid_store=uuid_file, print_url=False)
+		super().__init__(uuid_filepath=uuid_file, print_url=False)
 		self.store = iHeart_Storage(configdir=configdir, debug=debug)
 		self.station_list = []
 		self._station = None
@@ -752,18 +705,11 @@ def main():
 		category = None
 		search_term = None
 
-	configdir = os.path.join(
-		os.environ.get('APPDATA') or
-		os.environ.get('XDG_CONFIG_HOME') or
-		os.path.join(os.environ['HOME'], '.config'),
-		"iheartcli"
-	)
-	if not os.path.isdir(configdir): os.makedirs(configdir)
 
 	try:
 		# Welcome message
 		print(WELCOME_MSG)
-		radio = iHeart_CLI(configdir, debug=args.debug)
+		radio = iHeart_CLI(CONFIGDIR, debug=args.debug)
 		if category == iHeart_CLI.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)
