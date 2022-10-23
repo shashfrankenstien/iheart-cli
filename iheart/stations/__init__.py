@@ -1,4 +1,4 @@
 from .base import Station
 from .playlist import LocalPlaylist
-from .iheart_radio.stations import LiveStation, ArtistStation, SongStation
+from .iheart_radio.stations import iHeartLiveStation, iHeartArtistStation, iHeartSongStation
 from .aNON_radio.stations import aNONradio

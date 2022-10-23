@@ -1,13 +1,15 @@
 
+import os
 import time
 
 from . import client
-from ..base import Station, TrackListStation, Track, PRINT_PLAYING_URL
+from ..base import LiveStation, TrackListStation, Track
 from iheart.colors import Colors
 
 
 
-class LiveStation(Station):
+class iHeartLiveStation(LiveStation):
+
 	def __init__(self, station_dict):
 		super().__init__(station_dict=station_dict)
 		self.description = (self._dict.get('description') or '').strip()
@@ -17,17 +19,13 @@ class LiveStation(Station):
 
 		self.search_score = self._dict.get('score')
 
-	def __str__(self):
-		decor = Colors.colorize("**", Colors.RED)
-		return "{} {}: {} ({} at {}) {} {}".format(
-			decor,
-			self.__class__.__name__,
-			Colors.colorize(self.name, Colors.CYAN, bold=True),
-			Colors.colorize(self.description, Colors.BLUE, bold=True),
-			Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
-			decor,
-			Colors.colorize("- "+self.mrl, Colors.GRAY, bold=False) if PRINT_PLAYING_URL else '',
-		)
+	def _get_descr(self): # override
+		if self.now_playing is None:
+			return "({} at {})".format(
+				Colors.colorize(self.description, Colors.BLUE, bold=True),
+				Colors.colorize(str(self.frequency)+"MHz", Colors.GREEN, bold=True),
+			)
+		return super()._get_descr()
 
 	def _parse_stream(self):
 		self.streams = client.iget_station_streams(self.id)
@@ -50,6 +48,7 @@ class LiveStation(Station):
 		super().play()
 
 	def toggle_pause(self, pause=True):
+		'''special toggle for iheart live stations'''
 		if pause and self.is_playing():
 			self.stop()
 		elif not self.is_playing():
@@ -63,7 +62,8 @@ class LiveStation(Station):
 
 
 
-class ArtistStation(TrackListStation):
+class iHeartArtistStation(TrackListStation):
+
 	def __init__(self, artist_dict):
 		super().__init__(station_dict=artist_dict)
 		self.imageUrl = self._dict.get('image')
@@ -81,7 +81,7 @@ class ArtistStation(TrackListStation):
 				time.sleep(10)
 
 
-class SongStation(ArtistStation):
+class iHeartSongStation(iHeartArtistStation):
 
 	def __init__(self, track_dict):
 		# artist = iget_artist_profile(track_dict['artistId'])

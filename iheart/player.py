@@ -57,6 +57,8 @@ class VLCPlayer(object):
 		return cls._PLAYER
 
 	def get_internal_player(self):
+		if self.plr is None:
+			return None
 		if self.list_player:
 			return self.plr.get_media_player()
 		else:
@@ -68,7 +70,7 @@ class VLCPlayer(object):
 			if self._play_start_time is not None:
 				event.elapsed = time.time() - self._play_start_time - self._total_paused_time
 			else:
-				event.elapsed = None
+				event.elapsed = 999
 			callback(event)
 		if self._manager is not None:
 			self._manager.event_attach(event_type, _callback_wrapper)
@@ -146,4 +148,16 @@ class VLCPlayer(object):
 			self._total_paused_time += time.time() - self._paused_at
 		time.sleep(0.1)
 		return self.is_playing()
-		# return self.plr.get_state()
+
+	def parse_metadata(self):
+		out = {}
+		player = self.get_internal_player()
+		if player:
+			media = player.get_media()
+			if not media.is_parsed():
+				media.parse_with_options(vlc.MediaParseFlag.local, 100)
+			out['now_playing'] = media.get_meta(vlc.Meta.NowPlaying)
+			out['title'] = media.get_meta(vlc.Meta.Title)
+			out['artist'] = media.get_meta(vlc.Meta.Artist)
+			out['duration'] = media.get_meta(vlc.Meta.TrackTotal)
+		return out

@@ -6,16 +6,15 @@ import argparse
 
 
 from .stations import (
-	LiveStation,
-	SongStation,
-	ArtistStation,
+	iHeartLiveStation,
+	iHeartSongStation,
+	iHeartArtistStation,
 	LocalPlaylist,
 
 	aNONradio
 )
 
 from .stations.iheart_radio import client as iheart_client
-from .stations.base import PRINT_PLAYING_URL
 
 from .player import vlc_is_installed
 from .colors import Colors
@@ -27,7 +26,7 @@ try:
 except ImportError:
 	import termios
 	import tty
-	def getch():  # getchar(), getc(stdin)  #PYCHOK flake
+	def getch(): # getchar(), getc(stdin)  #PYCHOK flake
 		fd = sys.stdin.fileno()
 		old = termios.tcgetattr(fd)
 		try:
@@ -78,9 +77,9 @@ class iRadio_Storage(object):
 	CONFIG = {}
 
 	_STATION_CLASS_MAP = {s.__name__: s for s in [
-		ArtistStation,
-		LiveStation,
-		SongStation,
+		iHeartArtistStation,
+		iHeartLiveStation,
+		iHeartSongStation,
 		LocalPlaylist,
 		aNONradio,
 	]}
@@ -152,7 +151,7 @@ class iRadio_Storage(object):
 		return self._STATION_CLASS_MAP[d['__name__']](d)
 
 	def current_track_to_dict(self, station_instance):
-		if isinstance(station_instance, (ArtistStation, SongStation)):
+		if isinstance(station_instance, (iHeartArtistStation, iHeartSongStation)):
 			track = station_instance.get_current_track()
 			if track:
 				return self.station_to_dict(track)
@@ -213,19 +212,17 @@ class iHeart(object):
 	def __init__(self, uuid_filepath):
 		self.user = iheart_client.ilogin(uuid_filepath=uuid_filepath)
 		self.user_id = self.user['profileId']
-		global PRINT_PLAYING_URL
-		PRINT_PLAYING_URL = os.environ.get('RADIO_DEBUG') == "1"
 
 	def search(self, keyword, category=None, startIndex=0):
 		if category is None: category = self.ARTISTS
 		search_res = iheart_client.isearch(keyword, startIndex=startIndex)
 
 		if category==self.STATIONS:
-			station_class = LiveStation
+			station_class = iHeartLiveStation
 		elif category==self.ARTISTS:
-			station_class = ArtistStation
+			station_class = iHeartArtistStation
 		elif category==self.TRACKS:
-			station_class = SongStation
+			station_class = iHeartSongStation
 		else:
 			# return search_res['results'][category]
 			raise NotImplementedError("'{}' not implemented yet")
@@ -288,14 +285,14 @@ class iHeart_CLI(iHeart):
 	@property
 	def category(self):
 		# category getter to convert current station to it's category
-		if isinstance(self.station, LiveStation):
+		if isinstance(self.station, iHeartLiveStation):
 			return self.STATIONS
 		# ArtistStation should be checked for after checking for it's subclasses - SongStation and Playlist
-		elif isinstance(self.station, SongStation):
+		elif isinstance(self.station, iHeartSongStation):
 			return self.TRACKS
 		elif isinstance(self.station, LocalPlaylist):
 			return self.PLAYLISTS
-		elif isinstance(self.station, ArtistStation):
+		elif isinstance(self.station, iHeartArtistStation):
 			return self.ARTISTS
 		elif isinstance(self.station, aNONradio):
 			return self.ANON
@@ -316,7 +313,7 @@ class iHeart_CLI(iHeart):
 			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
 			self.CONTROLS['j'] = 'jump-to-track' # Jump to track by index in playlist
 			self.CONTROLS['d'] = 'delete-from-playlist' # Delete track from playlist
-		elif isinstance(station, LiveStation):
+		elif isinstance(station, iHeartLiveStation):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
 			del self.CONTROLS['r'] # Cannot repeat track in live stations
 		elif isinstance(station, aNONradio):

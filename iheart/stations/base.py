@@ -5,7 +5,7 @@ from datetime import timedelta
 from iheart.colors import Colors
 from iheart.player import VLCPlayer
 
-PRINT_PLAYING_URL = False
+
 
 
 
@@ -28,15 +28,18 @@ class Station(object):
 	def get_dict(self):
 		return self._dict
 
+	def _get_descr(self): # override me!
+		return f"({Colors.colorize(str(self.id), Colors.BLUE, bold=True)})"
+
 	def __str__(self):
 		decor = Colors.colorize("**", Colors.RED)
-		return "{} {}: {} ({}) {} {}".format(
+		return "{} {}: {} {} {} {}".format(
 			decor,
 			self.__class__.__name__,
 			Colors.colorize(self.name, Colors.CYAN, bold=True),
-			Colors.colorize(str(self.id), Colors.BLUE, bold=True),
+			self._get_descr(),
 			decor,
-			Colors.colorize("- "+str(self.mrl), Colors.GRAY, bold=False) if PRINT_PLAYING_URL else '',
+			Colors.colorize("- "+str(self.mrl), Colors.GRAY, bold=False) if os.environ.get('RADIO_DEBUG') == "1" else '',
 		)
 
 	def __repr__(self):
@@ -49,7 +52,8 @@ class Station(object):
 		if self.mrl is not None:
 			if self.mrl != self.CURRENT_PLAYING_MRL:
 				# only print now playing name if the new mrl is different
-				if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
+				if os.environ.get('RADIO_DEBUG') == "1":
+					sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 
 			player = self.get_player()
 			self.show_time()
@@ -57,14 +61,13 @@ class Station(object):
 			# media url might take a bit to load. while loading, is_playing returns False.
 			# - sleeping a bit to allow time for the player to load the url and start playing
 			# - time this out at 10 seconds
-			sys.stdout.write("\r\t+..:..\r")
+			sys.stdout.write("\r\t..:..\r")
 			st = time.time()
 			while not player.is_playing() and time.time()-st < 10:
 				time.sleep(0.5)
 			if not player.is_playing():
 				raise TimeoutError("could not play {}".format(self.mrl))
 			self.CURRENT_PLAYING_MRL = self.mrl # register class level current playing mrl
-
 
 	def toggle_pause(self, pause=True):
 		if self.mrl is not None:
@@ -91,16 +94,15 @@ class Station(object):
 	def info(self):
 		return {'mrl': self.mrl, 'id': self.id, 'name': self.name}
 
-	def _print_time(self, event):
-		if event.elapsed is not None:
-			elapsed = int(event.elapsed)
-			hhmmss = str(timedelta(seconds=elapsed))
-			countdown = f"\t+{hhmmss}\r"
-			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
+	def _print_time_cb(self, event):
+		elapsed = int(event.elapsed)
+		hhmmss = str(timedelta(seconds=elapsed))
+		countdown = f"\t+{hhmmss}\r"
+		sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def show_time(self, show=True):
 		if show:
-			self.get_player().register_event(VLCPlayer.POSITION_CHANGED, self._print_time)
+			self.get_player().register_event(VLCPlayer.POSITION_CHANGED, self._print_time_cb)
 		else:
 			self.get_player().remove_event(VLCPlayer.POSITION_CHANGED)
 
@@ -183,8 +185,8 @@ class TrackListStation(Station):
 		except Exception as e:
 			print(e)
 
-	def _print_time(self, event): # overridden
-		if self.current_track is not None and event.elapsed is not None:
+	def _print_time_cb(self, event): # overridden
+		if self.current_track is not None:
 			remaining = int(self.current_track.duration - event.elapsed)
 			m = remaining // 60
 			s = (remaining % 60)
@@ -212,3 +214,46 @@ class TrackListStation(Station):
 		player = self.get_player()
 		player.stop() # calling .stop() is not required here, but it makes sense and doesn't hurt
 		self._on_complete_cb(None)
+
+
+
+class LiveStation(Station):
+	'''
+	This is a small enhancement to Station class
+	- for live radio, we don't have a song name.
+	- this class implements metadata parsing and prints self when track changes by overriding _print_time_cb
+	'''
+
+	def __init__(self, station_dict):
+		super().__init__(station_dict)
+		self.now_playing = None
+		self.artist = None
+		self.title = None
+		self.duration = None
+
+	def _get_descr(self): # override
+		if self.now_playing is not None:
+			return '"{}" by {} on "{}" ()'.format(
+				Colors.colorize(str(self.now_playing), Colors.YELLOW, bold=True),
+				Colors.colorize(str(self.artist), Colors.GREEN, bold=True),
+				Colors.colorize(str(self.title), Colors.GREEN, bold=True),
+				Colors.colorize(str(self.duration), Colors.GREEN, bold=True),
+			)
+		return super()._get_descr()
+
+	def _print_time_cb(self, event): # override
+		player = self.get_player()
+		meta = player.parse_metadata()
+		if str(meta.get('now_playing')).strip().lower() != str(self.now_playing).strip().lower():
+			self.now_playing = str(meta.get('now_playing')).strip()
+			self.title = str(meta.get('title')).strip()
+			self.artist = str(meta.get('artist')).strip()
+			self.duration = str(meta.get('duration')).strip()
+			print(self, end='\n\r', flush=True)
+		return super()._print_time_cb(event)
+
+	def forward(self): # override - disable forwarding
+		pass
+
+	def rewind(self): # override - disable rewinding
+		pass
