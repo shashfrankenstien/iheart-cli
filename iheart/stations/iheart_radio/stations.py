@@ -78,7 +78,7 @@ class ArtistStation(TrackListStation):
 					yield Track(trk_dict)
 			except Exception as e:
 				print(e)
-				time.sleep(0.5)
+				time.sleep(10)
 
 
 class SongStation(ArtistStation):

@@ -52,11 +52,12 @@ class Station(object):
 				if PRINT_PLAYING_URL: sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 
 			player = self.get_player()
+			self.show_time()
 			player.play()
 			# media url might take a bit to load. while loading, is_playing returns False.
 			# - sleeping a bit to allow time for the player to load the url and start playing
 			# - time this out at 10 seconds
-			sys.stdout.write("\t+..:..\r")
+			sys.stdout.write("\r\t+..:..\r")
 			st = time.time()
 			while not player.is_playing() and time.time()-st < 10:
 				time.sleep(0.5)
