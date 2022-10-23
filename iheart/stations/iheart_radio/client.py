@@ -90,7 +90,9 @@ def ilogin(uuid_filepath):
 
 
 def iget_market_id(zipCode):
-	return requests.get(markets_url.format(zipCode=zipCode), headers=HEADERS).json()['hits'][0]
+	res = requests.get(markets_url.format(zipCode=zipCode), headers=HEADERS).json()['hits']
+	if len(res)==0:
+		raise Exception("Unsupported zipCode")
 
 
 def isearch(keyword, startIndex=0, maxRows=10, marketId=159):

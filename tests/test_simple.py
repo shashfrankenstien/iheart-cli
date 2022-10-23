@@ -5,6 +5,7 @@ printjson = lambda j: print(json.dumps(j, indent=4))
 
 from iheart.player import VLCPlayer
 from iheart.__main__ import iHeart
+from iheart.stations.iheart_radio import client as iheart_client
 
 
 def test_player():
@@ -16,9 +17,14 @@ def test_player():
 	player.stop()
 
 
-def test_stations():
+def test_iheart_search():
+	res = iheart_client.isearch("Bob")
+	assert('results' in res)
+
+
+def test_iheart_live_stations():
 	radio = iHeart("uu.uuid")
-	res = radio.search("Classic Rock", category=iHeart.STATIONS)
+	res = radio.search("Rock", category=iHeart.STATIONS)
 	for station in res[:2]:
 		station.play()
 		time.sleep(5)
@@ -26,26 +32,39 @@ def test_stations():
 		time.sleep(2)
 
 
-def test_artist_radio():
+def test_iheart_artist_radio():
 	artist_keyword = "Queen" # = input("Search for artist: ")
 	radio = iHeart("uu.uuid")
-	artist = radio.search(artist_keyword, category=iHeart.ARTISTS)[0]
-	print(artist)
-	printjson(artist.get_dict())
-	artist.play()
-	time.sleep(5)
-	artist.stop()
+	res = radio.search(artist_keyword, category=iHeart.ARTISTS)
+	for station in res[:2]:
+		station.play()
+		printjson(station.get_dict())
+		time.sleep(5)
+		station.stop()
+		time.sleep(1)
 	# printjson({'a': artist.get_current_track().get_dict()})
 
-def test_track_search():
+def test_iheart_song_radio():
 	track_name = "wild world"
 	radio = iHeart("uu.uuid")
-	res1 = radio.search(track_name, category=iHeart.TRACKS)[0]
-	print(res1)
-	printjson(res1.get_dict())
-	res1.play()
-	time.sleep(5)
-	res1.stop()
+	res = radio.search(track_name, category=iHeart.TRACKS)
+	for station in res[:2]:
+		print(station)
+		printjson(station.get_dict())
+		station.play()
+		time.sleep(5)
+		station.stop()
 	# printjson({'a': res1.get_current_track().get_dict()})
 
 	# printjson(iget_track_info(res1['id']))
+
+
+# def test_internet_radio():
+# 	track_name = "wild world"
+# 	radio = iHeart("uu.uuid")
+# 	res1 = radio.search(track_name, category=iHeart.TRACKS)[0]
+# 	print(res1)
+# 	printjson(res1.get_dict())
+# 	res1.play()
+# 	time.sleep(5)
+# 	res1.stop()

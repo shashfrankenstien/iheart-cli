@@ -17,7 +17,7 @@ class aNONradio(Station):
 
 	def __str__(self):
 		player = self.get_player()
-		if player.is_playing():
+		if player.plr:
 			media = player.plr.get_media()
 			if not media.is_parsed():
 				media.parse()

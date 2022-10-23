@@ -2,23 +2,23 @@ import random
 from collections import deque
 
 from .stations import ArtistStation
-from iheart.player import Track
+from ..base import Track
 from iheart.colors import Colors
 
 
 class Playlist(ArtistStation):
 	'''Json stored playlist implementation using ArtistRadio class'''
 	def __init__(self, playlist_dict):
-		self.__dict = playlist_dict
-		self.name = playlist_dict['name']
-		super().__init__({'id': self.name, 'name': self.name, 'user_id':None})
+		station_dict = {
+			'id': playlist_dict['name'],
+			'name': playlist_dict['name'],
+			'user_id':None
+		}
+		super().__init__(station_dict)
 		self.track_list = deque([Track(trk_dict) for trk_dict in playlist_dict['track_dict_list']]) # deque so as to use rotate
 		self.tracks_to_play = self.track_list.copy() # make copy to implement shuffle
 		self.shuffle = False
 		self.now_playing_id = None
-
-	def get_dict(self):
-		return self.__dict
 
 	def __str__(self):
 		return "<Playlist: {}> {}".format(

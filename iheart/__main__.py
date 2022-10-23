@@ -59,6 +59,7 @@ CONFIGDIR = os.path.join(
 if not os.path.isdir(CONFIGDIR): os.makedirs(CONFIGDIR)
 
 
+
 def _print_error(msg):
 	print(" {} {}".format(
 		Colors.colorize("x", Colors.RED, bold=True),
@@ -67,7 +68,7 @@ def _print_error(msg):
 
 
 
-class iHeart_Storage(object):
+class iRadio_Storage(object):
 
 	DATA = {
 		'last_played': None,
@@ -76,15 +77,14 @@ class iHeart_Storage(object):
 
 	CONFIG = {}
 
-	_STATION_CLASS_MAP = {
-		ArtistStation.__name__: ArtistStation,
-		LiveStation.__name__: LiveStation,
-		SongStation.__name__: SongStation,
-		Station.__name__: Station,
-
-		Playlist.__name__: Playlist,
-		aNONradio.__name__: aNONradio,
-	}
+	_STATION_CLASS_MAP = {s.__name__: s for s in [
+		Station, # base class
+		ArtistStation,
+		LiveStation,
+		SongStation,
+		Playlist,
+		aNONradio,
+	]}
 
 	def __init__(self, configdir, debug=False):
 		self._debug = debug
@@ -171,10 +171,11 @@ class iHeart_Storage(object):
 			track = self.current_track_to_dict(track)
 		if playlist_name not in self.DATA['playlists']:
 			self.DATA['playlists'][playlist_name] = OrderedDict()
-		track_id = str(track['__id__']) # json.dump automatically converts keys to strings. make it explicit!
-		if track_id not in self.DATA['playlists'][playlist_name]:
-			self.DATA['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
-		self.write()
+		if '__id__' in track:
+			track_id = str(track['__id__']) # json.dump automatically converts keys to strings. make it explicit!
+			if track_id not in self.DATA['playlists'][playlist_name]:
+				self.DATA['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
+			self.write()
 
 	def delete_from_playlist_by_id(self, playlist_name, track_id):
 		track_id = str(track_id) # json.dump automatically converts keys to strings. make it explicit!
@@ -239,7 +240,7 @@ class iHeart(object):
 
 class iHeart_CLI(iHeart):
 
-	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in __main__.py
+	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in stations/iheart_radio/playlist.py
 	ANON = 'aNONradio'
 
 	CATEGORIES = OrderedDict({
@@ -271,7 +272,7 @@ class iHeart_CLI(iHeart):
 	def __init__(self, configdir, debug=False):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
 		super().__init__(uuid_filepath=uuid_file, print_url=False)
-		self.store = iHeart_Storage(configdir=configdir, debug=debug)
+		self.store = iRadio_Storage(configdir=configdir, debug=debug)
 		self.station_list = []
 		self._station = None
 		self._debug = debug
@@ -409,14 +410,16 @@ class iHeart_CLI(iHeart):
 
 
 	def list_current_stations(self, getter=None):
+		'''
+		This method takes an input function 'getter'
+		- the getter must take start index as argument and return a list of stations.
+			this allows for pagination type workflow
+		'''
 		try:
 			new_search = (getter is not None)
 			is_playing = self.station is not None and self.station.is_playing()
 			if new_search:
-				msg = "Enter 'm' to list more results."
-				if not is_playing:
-					msg += "\nPress Enter key to select choice 0."
-				print(app_msg_color(msg))
+				print(app_msg_color("Enter 'm' to list more results."))
 				self.station_list = []
 
 			while True:
@@ -438,7 +441,10 @@ class iHeart_CLI(iHeart):
 						idx += cur_st_len
 					print("\t", app_msg_color(str(idx)), ")", s.name)
 
-				choice = input("Choice: ").strip()
+				choice_msg = "Choice: "
+				if not is_playing:
+					choice_msg = f"Choice {app_msg_color('(default 0)')}: "
+				choice = input(choice_msg).strip()
 				if choice == '' and not is_playing:
 					choice = 0 # default choice if not playing anything
 				elif choice == 'm' and new_search:
@@ -578,10 +584,10 @@ class iHeart_CLI(iHeart):
 
 					elif cmd == 'print-current':
 						self.station.show_time(False)
-						if isinstance(self.station, (LiveStation, aNONradio)):
-							print(self.station)
-						else:
+						if hasattr(self.station, 'current_track'):
 							print(self.station.current_track)
+						else:
+							print(self.station)
 
 					elif cmd == 'change-category':
 						self.station.show_time(False)
