@@ -1,6 +1,6 @@
 import vlc
 
-from .base import Station
+from ..base import Station
 from iheart.colors import Colors
 
 
