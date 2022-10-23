@@ -6,16 +6,16 @@ import argparse
 
 
 from .stations import (
-	Station, # base class
 	LiveStation,
 	SongStation,
 	ArtistStation,
-	Playlist,
+	LocalPlaylist,
 
 	aNONradio
 )
 
 from .stations.iheart_radio import client as iheart_client
+from .stations.base import PRINT_PLAYING_URL
 
 from .player import vlc_is_installed
 from .colors import Colors
@@ -78,16 +78,15 @@ class iRadio_Storage(object):
 	CONFIG = {}
 
 	_STATION_CLASS_MAP = {s.__name__: s for s in [
-		Station, # base class
 		ArtistStation,
 		LiveStation,
 		SongStation,
-		Playlist,
+		LocalPlaylist,
 		aNONradio,
 	]}
 
-	def __init__(self, configdir, debug=False):
-		self._debug = debug
+	def __init__(self, configdir):
+		self._debug = os.environ.get('RADIO_DEBUG') == "1"
 		self.configdir = configdir
 		self.CONFIG = self._load_config()
 		self.DATA = self._load_data()
@@ -142,6 +141,8 @@ class iRadio_Storage(object):
 	def station_to_dict(self, station_instance):
 		d = station_instance.get_dict()
 		d['__name__'] = station_instance.__class__.__name__
+		if d['__name__'] not in self._STATION_CLASS_MAP:
+			raise Exception(f"unsupported station '{d['__name__']}'")
 		d['__id__'] = station_instance.id
 		return d
 
@@ -209,11 +210,11 @@ class iHeart(object):
 	# TALKSHOWS = "talkShows"
 	# TALKTHEMES = "talkThemes"
 
-	def __init__(self, uuid_filepath, print_url=False):
+	def __init__(self, uuid_filepath):
 		self.user = iheart_client.ilogin(uuid_filepath=uuid_filepath)
 		self.user_id = self.user['profileId']
 		global PRINT_PLAYING_URL
-		PRINT_PLAYING_URL = print_url
+		PRINT_PLAYING_URL = os.environ.get('RADIO_DEBUG') == "1"
 
 	def search(self, keyword, category=None, startIndex=0):
 		if category is None: category = self.ARTISTS
@@ -269,13 +270,13 @@ class iHeart_CLI(iHeart):
 
 	CONTROLS = COMMON_CONTROLS.copy() # this copy might be modified downstream according to type of station
 
-	def __init__(self, configdir, debug=False):
+	def __init__(self, configdir):
 		uuid_file = os.path.join(configdir, "iheart-api.uuid")
-		super().__init__(uuid_filepath=uuid_file, print_url=False)
-		self.store = iRadio_Storage(configdir=configdir, debug=debug)
+		super().__init__(uuid_filepath=uuid_file)
+		self.store = iRadio_Storage(configdir=configdir)
 		self.station_list = []
 		self._station = None
-		self._debug = debug
+		self._debug = os.environ.get('RADIO_DEBUG') == "1"
 
 
 	def print_help(self):
@@ -292,7 +293,7 @@ class iHeart_CLI(iHeart):
 		# ArtistStation should be checked for after checking for it's subclasses - SongStation and Playlist
 		elif isinstance(self.station, SongStation):
 			return self.TRACKS
-		elif isinstance(self.station, Playlist):
+		elif isinstance(self.station, LocalPlaylist):
 			return self.PLAYLISTS
 		elif isinstance(self.station, ArtistStation):
 			return self.ARTISTS
@@ -310,7 +311,7 @@ class iHeart_CLI(iHeart):
 	def station(self, station):
 		# Modifying controls based on selected station type
 		self.CONTROLS = self.COMMON_CONTROLS.copy()
-		if isinstance(station, Playlist):
+		if isinstance(station, LocalPlaylist):
 			self.CONTROLS['s'] = 'shuffle-playlist-toggle' # No search when in playlists, instead, use 's' for shuffle
 			self.CONTROLS['l'] = 'list-playlist-tracks' # List tracks when in playlists
 			self.CONTROLS['j'] = 'jump-to-track' # Jump to track by index in playlist
@@ -493,7 +494,7 @@ class iHeart_CLI(iHeart):
 
 	def delete_from_playlist(self):
 		'''deletes current track from playlist'''
-		if not isinstance(self.station, Playlist) or self.station.now_playing_id is None: # only works if current station is a playlist
+		if not isinstance(self.station, LocalPlaylist) or self.station.now_playing_id is None: # only works if current station is a playlist
 			return None
 		try:
 			choice = input(app_msg_color(f"Delete current track from '{self.station.name}'? (y/n): ")).strip()
@@ -516,7 +517,7 @@ class iHeart_CLI(iHeart):
 		try:
 			pl = self.store.get_playlists()
 			pl_dict = {'name': playlist_name, 'track_dict_list': list(pl[playlist_name].values())}
-			return Playlist(pl_dict)
+			return LocalPlaylist(pl_dict)
 		except Exception as e:
 			if self._debug: print(e)
 		return None
@@ -529,9 +530,7 @@ class iHeart_CLI(iHeart):
 				print("\t", app_msg_color(str(i)), ")", t)
 
 			choice = input("Choice: ").strip()
-			if choice == '':
-				choice = 0 # default choice
-			elif not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
+			if not choice or not choice.isnumeric() or int(choice)>=len(self.station.track_list):
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
 			self.station.jump_to(int(choice))
@@ -679,6 +678,11 @@ def main():
 		print("It can be installed from https://www.videolan.org/\n")
 		return 1
 
+	if args.debug:
+		os.environ['RADIO_DEBUG'] = "1"
+	else:
+		os.environ['RADIO_DEBUG'] = "0"
+
 	if args.version:
 		print(__version__)
 		return None
@@ -715,7 +719,7 @@ def main():
 	try:
 		# Welcome message
 		print(WELCOME_MSG)
-		radio = iHeart_CLI(CONFIGDIR, debug=args.debug)
+		radio = iHeart_CLI(CONFIGDIR)
 		if category == iHeart_CLI.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)

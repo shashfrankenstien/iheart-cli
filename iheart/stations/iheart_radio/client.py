@@ -133,7 +133,10 @@ def iget_artist_station(user_id, artist_id):
 		headers=HEADERS
 	)
 	try:
-		return res.json()
+		res_json = res.json()
+		if 'error' in res_json:
+			raise Exception(str(res_json['error']))
+		return res_json
 	except:
 		raise Exception(res.text)
 
@@ -146,7 +149,10 @@ def iget_artist_streams(astream_id):
 		'stationType': 'RADIO'
 	}, headers=HEADERS)
 	try:
-		return res.json().get('items') or []
+		res_json = res.json()
+		if 'error' in res_json:
+			raise Exception(str(res_json['error']))
+		return res_json.get('items') or []
 	except:
 		raise Exception(res.text)
 

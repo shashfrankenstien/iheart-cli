@@ -2,7 +2,7 @@
 import time
 
 from . import client
-from ..base import Station, Track, PRINT_PLAYING_URL
+from ..base import Station, TrackListStation, Track, PRINT_PLAYING_URL
 from iheart.colors import Colors
 
 
@@ -63,16 +63,12 @@ class LiveStation(Station):
 
 
 
-
-class ArtistStation(Station):
+class ArtistStation(TrackListStation):
 	def __init__(self, artist_dict):
 		super().__init__(station_dict=artist_dict)
 		self.imageUrl = self._dict.get('image')
 		self.search_score = self._dict.get('score')
 		self.rank = self._dict.get('rank')
-
-		self.current_track = None
-		self.repeat = False
 
 	def iter_tracks(self):
 		while True:
@@ -83,35 +79,6 @@ class ArtistStation(Station):
 			except Exception as e:
 				print(e)
 				time.sleep(0.5)
-
-	def get_current_track(self):
-		return self.current_track
-
-	def show_time(self, show=True):
-		self.current_track.show_time(show)
-
-	def _play_next(self, track_generator):
-		if self.repeat == False:
-			# go to the next track only if not in repeat mode
-			self.current_track = next(track_generator)
-			self.mrl = self.current_track.mrl
-		_next_player = lambda _: self._play_next(track_generator=track_generator)
-		self.current_track.play(on_complete=_next_player)
-
-	def play(self):
-		self._play_next(track_generator=self.iter_tracks())
-
-	def info(self):
-		try:
-			return self.current_track.get_dict()
-		except Exception as e:
-			print(e)
-
-	def forward(self):
-		self.current_track.force_end()
-
-	def toggle_repeat(self):
-		self.repeat = not self.repeat
 
 
 class SongStation(ArtistStation):
