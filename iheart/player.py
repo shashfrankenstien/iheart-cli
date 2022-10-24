@@ -89,7 +89,8 @@ class VLCPlayer(object):
 		self.inst.log_unset()
 		ext = (self.mrl.rpartition(".")[2])[:3]
 		if ext in ['pls', 'm3u']:
-			media_list = self.inst.media_list_new([self.mrl])
+			media_list = self.inst.media_list_new()
+			media_list.add_media(self.mrl)
 			self.plr = self.inst.media_list_player_new()
 			self.plr.set_media_list(media_list)
 			self.list_player = True

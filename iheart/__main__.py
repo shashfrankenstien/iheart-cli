@@ -11,7 +11,8 @@ from .stations import (
 	iHeartArtistStation,
 	LocalPlaylist,
 
-	aNONradio
+	aNONradio,
+	InternetRadio
 )
 
 from .stations.iheart_radio import client as iheart_client
@@ -82,6 +83,7 @@ class iRadio_Storage(object):
 		iHeartSongStation,
 		LocalPlaylist,
 		aNONradio,
+		InternetRadio,
 	]}
 
 	def __init__(self, configdir):
@@ -240,6 +242,7 @@ class iHeart_CLI(iHeart):
 
 	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in stations/iheart_radio/playlist.py
 	ANON = 'aNONradio'
+	INTERNET = 'internet-radio'
 
 	CATEGORIES = OrderedDict({
 		iHeart.ARTISTS: 'Artist Radio',
@@ -248,6 +251,7 @@ class iHeart_CLI(iHeart):
 		# non-iheart station types
 		PLAYLISTS: 'Playlists',
 		ANON: 'aNONradio.net',
+		INTERNET: 'internet-radio.com',
 	})
 
 	COMMON_CONTROLS = OrderedDict({
@@ -296,6 +300,8 @@ class iHeart_CLI(iHeart):
 			return self.ARTISTS
 		elif isinstance(self.station, aNONradio):
 			return self.ANON
+		elif isinstance(self.station, InternetRadio):
+			return self.INTERNET
 		else:
 			return None
 
@@ -316,7 +322,7 @@ class iHeart_CLI(iHeart):
 		elif isinstance(station, iHeartLiveStation):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
 			del self.CONTROLS['r'] # Cannot repeat track in live stations
-		elif isinstance(station, aNONradio):
+		elif isinstance(station, (aNONradio, InternetRadio)):
 			del self.CONTROLS['+'] # Cannot add live stations to playlists
 			del self.CONTROLS['r'] # Cannot repeat track in aNONradio stations
 			del self.CONTROLS['s'] # Cannot search track in aNONradio stations
@@ -334,6 +340,9 @@ class iHeart_CLI(iHeart):
 
 		if category == self.ANON:
 			return aNONradio()
+
+		if category == self.INTERNET:
+			return InternetRadio()
 
 		elif category == self.PLAYLISTS:
 			# highjacking playlist category for Json stored implementation
@@ -666,7 +675,8 @@ def main():
 	group.add_argument("-l", "--live", help="search Live radio with provided station name")
 	group.add_argument("-p", "--playlist", help="play selected local playlist (exact name required)")
 	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works while --playlist is specified)", action='store_true')
-	group.add_argument("--anon", help="play aNONradio.net", action="store_true")
+	group.add_argument("-n", "--anon", help="play aNONradio.net", action="store_true")
+	group.add_argument("-i", "--internet-radio", help="play internet-radio.com", action="store_true")
 
 	args = parser.parse_args()
 
@@ -706,6 +716,10 @@ def main():
 
 	elif args.anon is True:
 		category = iHeart_CLI.ANON
+		search_term = None
+
+	elif args.internet_radio is True:
+		category = iHeart_CLI.INTERNET
 		search_term = None
 
 	else:
