@@ -9,6 +9,17 @@ from iheart.player import VLCPlayer
 from iheart.__main__ import iHeart
 from iheart.stations.iheart_radio import client as iheart_client
 
+from iheart.stations import aNONradio, InternetRadio
+
+
+IHEART_UUID_FILE = "test.uuid"
+
+def teardown_function(function):
+	if os.path.isfile(IHEART_UUID_FILE):
+		os.remove(IHEART_UUID_FILE)
+
+
+
 
 def test_player():
 	url = 'http://custom-hls.iheart.com/bell-ingestion-pipeline-production-umg/encodes/Dec18/121218/full/00602537937011_20181206002655653/00602537937011_T55_audtrk.m4a.m3u8?null'
@@ -25,10 +36,11 @@ def test_iheart_search():
 
 
 def test_iheart_live_stations():
-	radio = iHeart("uu.uuid")
+	radio = iHeart(IHEART_UUID_FILE)
 	res = radio.search("Rock", category=iHeart.STATIONS)
 	for station in res[:2]:
 		station.play()
+		printjson(station.get_dict())
 		time.sleep(5)
 		station.stop()
 		time.sleep(2)
@@ -36,7 +48,7 @@ def test_iheart_live_stations():
 
 def test_iheart_artist_radio():
 	artist_keyword = "Queen" # = input("Search for artist: ")
-	radio = iHeart("uu.uuid")
+	radio = iHeart(IHEART_UUID_FILE)
 	res = radio.search(artist_keyword, category=iHeart.ARTISTS)
 	for station in res[:2]:
 		station.play()
@@ -48,7 +60,7 @@ def test_iheart_artist_radio():
 
 def test_iheart_song_radio():
 	track_name = "wild world"
-	radio = iHeart("uu.uuid")
+	radio = iHeart(IHEART_UUID_FILE)
 	res = radio.search(track_name, category=iHeart.TRACKS)
 	for station in res[:2]:
 		print(station)
@@ -56,17 +68,21 @@ def test_iheart_song_radio():
 		station.play()
 		time.sleep(5)
 		station.stop()
-	# printjson({'a': res1.get_current_track().get_dict()})
-
-	# printjson(iget_track_info(res1['id']))
 
 
-# def test_internet_radio():
-# 	track_name = "wild world"
-# 	radio = iHeart("uu.uuid")
-# 	res1 = radio.search(track_name, category=iHeart.TRACKS)[0]
-# 	print(res1)
-# 	printjson(res1.get_dict())
-# 	res1.play()
-# 	time.sleep(5)
-# 	res1.stop()
+
+def test_anon_radio():
+	radio = aNONradio()
+	printjson(radio.get_dict())
+	radio.play()
+	time.sleep(60) # unfortunately, this is very slow :(
+	radio.stop()
+
+
+def test_internet_radio():
+	radio = InternetRadio()
+	printjson(radio.get_dict())
+	radio.play()
+	time.sleep(60) # unfortunately, this is very slow :(
+	radio.stop()
+

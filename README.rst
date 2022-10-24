@@ -21,6 +21,7 @@ Features
     - Play songs in a playlist sequentially or on shuffle
 
 * Play `aNONradio <https://anonradio.net/>`_
+* Play `internet-radio <https://internet-radio.com/>`_
 
 Dependencies
 ---------------------
@@ -31,7 +32,7 @@ This project does not implement an audio player. It uses VLC for cross platform 
 Installation/Usage
 ---------------------
 
-Using pip - `Great read <https://matthew-brett.github.io/pydagogue/installing_scripts.html>`_
+Stable release using pip - `Great read <https://matthew-brett.github.io/pydagogue/installing_scripts.html>`_
 
 .. code::
 
@@ -39,7 +40,7 @@ Using pip - `Great read <https://matthew-brett.github.io/pydagogue/installing_sc
     $ iheart --help
 
 
-From repository
+Latest code from repository (might contains bugs and incomplete features)
 
 .. code::
 
@@ -52,8 +53,8 @@ From repository
 TODO
 ---------------------
 
-* Improve messages while in use
-* Add tests
+* Add more / better tests
+* aNONradio and internet-radio are very slow to start (almost 1 minute) - look into vlc documentation
 
 
 .. |Python 3.6| image:: https://img.shields.io/badge/python-3.6+-blue.svg
