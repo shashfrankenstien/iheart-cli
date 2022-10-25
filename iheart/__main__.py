@@ -142,8 +142,6 @@ class iRadio_Storage(object):
 	def station_to_dict(self, station_instance):
 		d = station_instance.get_dict()
 		d['__name__'] = station_instance.__class__.__name__
-		if d['__name__'] not in self._STATION_CLASS_MAP:
-			raise Exception(f"unsupported station '{d['__name__']}'")
 		d['__id__'] = station_instance.id
 		return d
 
@@ -495,7 +493,9 @@ class iHeart_CLI(iHeart):
 				print(app_msg_color("+ {}".format(pl)))
 
 		except Exception as e:
-			if self._debug: print(e)
+			_print_error(str(e))
+			if self._debug:
+				traceback.print_exc()
 
 
 	def delete_from_playlist(self):
