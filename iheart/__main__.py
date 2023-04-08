@@ -78,8 +78,6 @@ class iRadio_Storage(object):
 		'playlists': {},
 	}
 
-	CONFIG = {}
-
 	_STATION_CLASS_MAP = {s.__name__: s for s in [
 		iHeartArtistStation,
 		iHeartLiveStation,
@@ -92,8 +90,8 @@ class iRadio_Storage(object):
 	def __init__(self, configdir):
 		self._debug = os.environ.get('RADIO_DEBUG') == "1"
 		self.configdir = configdir
-		self.CONFIG = self._load_config()
-		self.DATA = self._load_data()
+		self._config = self._load_config()
+		self._data = self._load_data()
 
 	def _load_config(self):
 		if not os.path.isdir(self.configdir):
@@ -108,17 +106,17 @@ class iRadio_Storage(object):
 
 	def _load_data(self):
 		default_data = self.DATA.copy()
-		if os.path.isfile(self.CONFIG['last-played-file']):
+		if os.path.isfile(self._config['last-played-file']):
 			try:
-				with open(self.CONFIG['last-played-file'], 'r') as conf:
+				with open(self._config['last-played-file'], 'r') as conf:
 					default_data['last_played'] = json.load(conf, object_pairs_hook=OrderedDict)
 			except Exception as e:
 				if self._debug: print(e)
-		for f in os.listdir(self.CONFIG['playlist-dir-path']):
+		for f in os.listdir(self._config['playlist-dir-path']):
 			if f.endswith('.playlist.json'):
 				pl_name = f.replace(".playlist.json", "")
 				try:
-					with open(os.path.join(self.CONFIG['playlist-dir-path'], f), 'r') as pl:
+					with open(os.path.join(self._config['playlist-dir-path'], f), 'r') as pl:
 						default_data['playlists'][pl_name] = json.load(pl, object_pairs_hook=OrderedDict)
 				except Exception as e:
 					if self._debug: print(e)
@@ -126,12 +124,12 @@ class iRadio_Storage(object):
 
 	def write(self):
 		for pl_name, obj in self.get_playlists().items():
-			pl_file = os.path.join(self.CONFIG['playlist-dir-path'], '{}.playlist.json'.format(pl_name))
+			pl_file = os.path.join(self._config['playlist-dir-path'], '{}.playlist.json'.format(pl_name))
 			with open(pl_file, 'w') as pl:
 				json.dump(obj, pl, indent=4)
 
-		with open(self.CONFIG['last-played-file'], 'w') as conf:
-			conf.write(json.dumps(self.DATA['last_played'], indent=4))
+		with open(self._config['last-played-file'], 'w') as conf:
+			conf.write(json.dumps(self._data['last_played'], indent=4))
 
 	def station_to_dict(self, station_instance):
 		d = station_instance.get_dict()
@@ -157,28 +155,28 @@ class iRadio_Storage(object):
 	def update_last_played(self, track):
 		if not isinstance(track, dict):
 			track = self.station_to_dict(track)
-		self.DATA['last_played'] = track
+		self._data['last_played'] = track
 		self.write()
 
 	def add_to_playlist(self, playlist_name, track):
 		if not isinstance(track, dict):
 			track = self.current_track_to_dict(track)
-		if playlist_name not in self.DATA['playlists']:
-			self.DATA['playlists'][playlist_name] = OrderedDict()
+		if playlist_name not in self._data['playlists']:
+			self._data['playlists'][playlist_name] = OrderedDict()
 		if '__id__' in track:
 			track_id = str(track['__id__']) # json.dump automatically converts keys to strings. make it explicit!
-			if track_id not in self.DATA['playlists'][playlist_name]:
-				self.DATA['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
+			if track_id not in self._data['playlists'][playlist_name]:
+				self._data['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
 			self.write()
 
 	def delete_from_playlist_by_id(self, playlist_name, track_id):
 		track_id = str(track_id) # json.dump automatically converts keys to strings. make it explicit!
-		if playlist_name in self.DATA['playlists'] and track_id in self.DATA['playlists'][playlist_name]:
-			del self.DATA['playlists'][playlist_name][track_id]
+		if playlist_name in self._data['playlists'] and track_id in self._data['playlists'][playlist_name]:
+			del self._data['playlists'][playlist_name][track_id]
 			self.write()
 
 	def get_playlists(self):
-		return self.DATA['playlists']
+		return self._data['playlists']
 
 
 
@@ -658,17 +656,18 @@ def main():
 	parser = argparse.ArgumentParser("iheart")
 	parser.add_argument("-v", '--version', help="show version and exit", action="store_true")
 	parser.add_argument("-d", '--debug', help="enable debug messages", action="store_true")
-	parser.add_argument('--no-color', help="Disable color output", action="store_true")
+	parser.add_argument("-c", '--config-path', help="show config path and exit", action="store_true")
+	parser.add_argument('--no-color', help="disable color output", action="store_true")
 
 	group = parser.add_mutually_exclusive_group(required=False)
 	group.add_argument("-a", "--artist", help="search Artist radio with provided artist name")
 	group.add_argument("-s", "--song", help="search Song radio with provided song name")
 	group.add_argument("-l", "--live", help="search Live radio with provided station name")
 	group.add_argument("-p", "--playlist", help="play selected local playlist (exact name required)")
-	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works while --playlist is specified)", action='store_true')
 	group.add_argument("-n", "--anon", help="play aNONradio.net", action="store_true")
 	group.add_argument("-i", "--internet-radio", help="play internet-radio.com", action="store_true")
 
+	parser.add_argument("--shuffle", help="start playlist in shuffle mode (only works when --playlist is specified)", action='store_true')
 	args = parser.parse_args()
 
 	if not vlc_is_installed():
@@ -683,6 +682,10 @@ def main():
 
 	if args.version:
 		print(__version__)
+		return None
+
+	if args.config_path:
+		print(DATADIR)
 		return None
 
 	if args.no_color or not Colors.supported():
