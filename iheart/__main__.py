@@ -1,6 +1,6 @@
 import os, sys
 import traceback
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 import json
 import argparse
 
@@ -43,6 +43,8 @@ wipeline = lambda:sys.stdout.write("\33[2K\r")
 app_msg_color = lambda m: Colors.colorize(m, Colors.YELLOW, bold=False)
 app_critical_color = lambda m: Colors.colorize(m, Colors.RED, bold=False)
 
+CategoryControl = namedtuple('CategoryControl', ['name', 'shorthand'])
+
 
 WELCOME_MSG = '''Welcome to iHeart cli player (v{})!
 Type '?' during playback to show available commands.'''.format(__version__)
@@ -50,13 +52,14 @@ Type '?' during playback to show available commands.'''.format(__version__)
 WELCOME_MSG = app_msg_color(WELCOME_MSG)
 
 
-CONFIGDIR = os.path.join(
+DATADIR = os.path.join(
 	os.environ.get('APPDATA') or
-	os.environ.get('XDG_CONFIG_HOME') or
-	os.path.join(os.environ['HOME'], '.config'),
+	os.environ.get('XDG_DATA_HOME') or
+	os.path.join(os.environ['HOME'], '.local', 'share'),
 	"iheartcli"
 )
-if not os.path.isdir(CONFIGDIR): os.makedirs(CONFIGDIR)
+if not os.path.isdir(DATADIR):
+	os.makedirs(DATADIR)
 
 
 
@@ -93,23 +96,14 @@ class iRadio_Storage(object):
 		self.DATA = self._load_data()
 
 	def _load_config(self):
-		if not os.path.isdir(self.configdir): os.makedirs(self.configdir)
+		if not os.path.isdir(self.configdir):
+			os.makedirs(self.configdir)
 		temp_conf = {
 			'last-played-file': os.path.join(self.configdir, 'last_played.json'),
 			'playlist-dir-path': os.path.join(self.configdir, 'playlists'),
 		}
-		conf_file = os.path.join(self.configdir, 'config.json')
-		try:
-			with open(conf_file, 'r') as conf:
-				for k,v in json.load(conf).items():
-					temp_conf[k] = v
-		except Exception as e:
-			if self._debug: print(e)
 		if not os.path.isdir(temp_conf['playlist-dir-path']):
 			os.makedirs(temp_conf['playlist-dir-path'])
-
-		with open(conf_file, 'w') as conf:
-			json.dump(temp_conf, conf, indent=4)
 		return temp_conf
 
 	def _load_data(self):
@@ -243,13 +237,13 @@ class iHeart_CLI(iHeart):
 	INTERNET = 'internet-radio'
 
 	CATEGORIES = OrderedDict({
-		iHeart.ARTISTS: 'Artist Radio',
-		iHeart.TRACKS: 'Song Radio',
-		iHeart.STATIONS: "Live Radio",
+		iHeart.ARTISTS: CategoryControl('Artist Radio', 'a'),
+		iHeart.TRACKS: CategoryControl('Song Radio', 's'),
+		iHeart.STATIONS: CategoryControl("Live Radio", 'l'),
 		# non-iheart station types
-		PLAYLISTS: 'Playlists',
-		ANON: 'aNONradio.net',
-		INTERNET: 'internet-radio.com',
+		PLAYLISTS: CategoryControl('Playlists', 'p'),
+		ANON: CategoryControl('aNONradio.net', 'n'),
+		INTERNET: CategoryControl('internet-radio.com', 'i'),
 	})
 
 	COMMON_CONTROLS = OrderedDict({
@@ -353,24 +347,21 @@ class iHeart_CLI(iHeart):
 		print("Pick a category -")
 		pl = self.store.get_playlists()
 		playlist_count = len(pl)
-		cat_names = []
-		cats_consts = []
-		for c in self.CATEGORIES:
+		cats_consts = {}
+		for c, ctrl in self.CATEGORIES.items():
 			if c==self.PLAYLISTS and playlist_count==0:
 				continue
-			cats_consts.append(c)
-			cat_names.append(self.CATEGORIES[c])
+			cats_consts[ctrl.shorthand] = c
 
-		for i, s in enumerate(cat_names):
-			print("\t", app_msg_color(str(i)), ")", s)
+			print("\t", app_msg_color(str(ctrl.shorthand)), ")", ctrl.name)
 		try:
 			choice = input("Pick: ").strip()
 			if choice == '':
-				choice = 0 # default choice
-			elif not choice or not choice.isnumeric() or int(choice)>=len(cat_names):
+				choice = cats_consts.keys()[0] # default choice
+			elif not choice or choice not in cats_consts:
 				_print_error("Invalid choice!")
 				raise Exception("Invalid choice!")
-			return cats_consts[int(choice)]
+			return cats_consts[choice]
 		except Exception as e:
 			if self._debug: print(e)
 			if force:
@@ -405,7 +396,7 @@ class iHeart_CLI(iHeart):
 	def search_stations(self, category, keyword=None):
 		try:
 			if keyword is None:
-				keyword = input("Search {}: ".format(self.CATEGORIES[category]))
+				keyword = input("Search {}: ".format(self.CATEGORIES[category].name))
 			if not keyword.strip():
 				raise Exception("No keyword provided")
 			return self.list_current_stations(getter=lambda startIndex:self.search(keyword.strip(), category=category, startIndex=startIndex))
@@ -730,7 +721,7 @@ def main():
 	try:
 		# Welcome message
 		print(WELCOME_MSG)
-		radio = iHeart_CLI(CONFIGDIR)
+		radio = iHeart_CLI(DATADIR)
 		if category == iHeart_CLI.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)

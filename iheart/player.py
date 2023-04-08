@@ -95,6 +95,9 @@ class VLCPlayer(object):
 			self.plr.set_media_list(media_list)
 			self.list_player = True
 			# print("playing playlist>")
+		elif ext == "mp3":
+			self.plr = vlc.MediaPlayer(self.mrl) # for some reason some mp3 can't be played with self.inst.media_player_new()
+			self.list_player = False
 		else:
 			media = self.inst.media_new(self.mrl)
 			self.plr = self.inst.media_player_new()
