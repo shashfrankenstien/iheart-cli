@@ -39,6 +39,7 @@ class iRadio_Storage(object):
 			'last-played-file': os.path.join(datadir, 'last_played.json'),
 			'playlist-dir-path': os.path.join(datadir, 'playlists'),
 			'history-dir-path': os.path.join(datadir, 'history'),
+			'track-history': self._config_manager.get_bool(key='track-history', default=True),
 			'history-min-play-seconds': self._config_manager.get_int(key='history-min-play-seconds', default=10), # only songs that are atleast played for this long get saved in history
 		}
 		if not os.path.isdir(temp_conf['playlist-dir-path']):
