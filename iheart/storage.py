@@ -142,18 +142,19 @@ class iRadio_Storage(object):
 
 
 	def now_playing(self, track):
-		if self._current_track is not None and self._current_track_start_dt is not None:
-			end_dt = dt.now()
-			duration = (end_dt - self._current_track_start_dt).total_seconds()
-			if duration >= self._config.get('history-min-play-seconds', 0): # if the song was atleast played for these many seconds, we will store it in history
-				track_dict = self.current_track_to_dict(self._current_track)
-				track_dict['play_start_dt'] = self._current_track_start_dt
-				track_dict['play_end_dt'] = end_dt
-				track_dict['played_duration'] = duration
-				self._session_hist.append(track_dict)
+		if self._config['track-history']:
+			if self._current_track is not None and self._current_track_start_dt is not None:
+				end_dt = dt.now()
+				duration = (end_dt - self._current_track_start_dt).total_seconds()
+				if duration >= self._config.get('history-min-play-seconds', 0): # if the song was atleast played for these many seconds, we will store it in history
+					track_dict = self.current_track_to_dict(self._current_track)
+					track_dict['play_start_dt'] = self._current_track_start_dt
+					track_dict['play_end_dt'] = end_dt
+					track_dict['played_duration'] = duration
+					self._session_hist.append(track_dict)
 
-				with open(os.path.join(self._config['history-dir-path'], self._session_name), 'w') as sess:
-					sess.write(json.dumps(self._session_hist, indent=4, default=str))
+					with open(os.path.join(self._config['history-dir-path'], self._session_name), 'w') as sess:
+						sess.write(json.dumps(self._session_hist, indent=4, default=str))
 
-		self._current_track = track
-		self._current_track_start_dt = dt.now()
+			self._current_track = track
+			self._current_track_start_dt = dt.now()
