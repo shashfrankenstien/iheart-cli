@@ -45,6 +45,18 @@ class Station(object):
 	def __repr__(self):
 		return str(self)
 
+
+	def _print_time_cb(self, event):
+		elapsed = int(event.elapsed)
+		hhmmss = str(timedelta(seconds=elapsed))
+		countdown = f"\t+{hhmmss}\r"
+		sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
+
+
+	def _end_reached_cb(self, event):
+		'''override this function'''
+		pass
+
 	def get_player(self):
 		return VLCPlayer.get_player(self.mrl)
 
@@ -56,6 +68,7 @@ class Station(object):
 					sys.stdout.write(Colors.colorize(self.mrl, Colors.GRAY) + "\n\r")
 
 			player = self.get_player()
+			player.register_event(player.END_REACHED, self._end_reached_cb)
 			self.show_time()
 			player.play()
 			# media url might take a bit to load. while loading, is_playing returns False.
@@ -93,12 +106,6 @@ class Station(object):
 
 	def info(self):
 		return {'mrl': self.mrl, 'id': self.id, 'name': self.name}
-
-	def _print_time_cb(self, event):
-		elapsed = int(event.elapsed)
-		hhmmss = str(timedelta(seconds=elapsed))
-		countdown = f"\t+{hhmmss}\r"
-		sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
 	def show_time(self, show=True):
 		if show:
@@ -168,7 +175,8 @@ class TrackListStation(Station):
 
 		self.current_track = None
 		self.repeat = False
-		self._on_complete_cb = lambda _:None
+		self._track_generator = self.iter_tracks()
+		self._track_change_cbs = set()
 
 	def iter_tracks(self):
 		raise NotImplementedError("'iter_tracks' should be overridden in a subclass")
@@ -193,27 +201,41 @@ class TrackListStation(Station):
 			countdown = f"\t-{m:02d}:{s:02d}/{self.current_track.duration_str_padded}\r"
 			sys.stdout.write(Colors.colorize(countdown, Colors.WHITE, bold=True))
 
-	def _play_next(self, track_generator):
+
+	def _end_reached_cb(self, event): # overridden
+		self._play_next()
+
+	def _play_next(self):
 		if self.repeat == False:
 			# go to the next track only if not in repeat mode
-			self.current_track = next(track_generator)
+			self.current_track = next(self._track_generator)
 			self.mrl = self.current_track.mrl
 
 		if self.mrl != self.CURRENT_PLAYING_MRL:
 			sys.stdout.write(Colors.colorize("( Now Playing ) ", Colors.GRAY, bold=True) + str(self.current_track) + "\n\r")
-		self._on_complete_cb = lambda _: self._play_next(track_generator=track_generator)
+
 		player = self.get_player()
 		player.stop()
-		player.register_event(player.END_REACHED, self._on_complete_cb)
+		# run track change callbacks
+		for cb in self._track_change_cbs:
+			try:
+				cb(self.current_track)
+			except Exception as e:
+				print(e)
+
 		super().play()
 
+
 	def play(self):
-		self._play_next(track_generator=self.iter_tracks())
+		self._play_next()
 
 	def forward(self):
 		player = self.get_player()
 		player.stop() # calling .stop() is not required here, but it makes sense and doesn't hurt
-		self._on_complete_cb(None)
+		self._play_next()
+
+	def on_track_change(self, func): # register callback function
+		self._track_change_cbs.add(func)
 
 
 

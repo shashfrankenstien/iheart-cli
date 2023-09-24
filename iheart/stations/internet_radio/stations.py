@@ -12,6 +12,7 @@ class InternetRadio(LiveStation):
         for i, d in enumerate(station_dicts):
             print(f"\t{i}) {d['name']} ({d['current_track']}) [{d['listeners']} listeners]")
         print("selecting 0")
+        print("tuning in..")
         super().__init__(station_dicts[0])
 
     def info(self):

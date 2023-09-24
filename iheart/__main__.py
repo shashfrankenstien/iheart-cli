@@ -19,6 +19,8 @@ from .stations.iheart_radio import client as iheart_client
 
 from .player import vlc_is_installed
 from .colors import Colors
+from .storage import iRadio_Storage
+from .conf import ConfigurationManager
 from . import __version__
 
 
@@ -52,16 +54,6 @@ Type '?' during playback to show available commands.'''.format(__version__)
 WELCOME_MSG = app_msg_color(WELCOME_MSG)
 
 
-DATADIR = os.path.join(
-	os.environ.get('APPDATA') or
-	os.environ.get('XDG_DATA_HOME') or
-	os.path.join(os.environ['HOME'], '.local', 'share'),
-	"iheartcli"
-)
-if not os.path.isdir(DATADIR):
-	os.makedirs(DATADIR)
-
-
 
 def _print_error(msg):
 	print(" {} {}".format(
@@ -69,114 +61,6 @@ def _print_error(msg):
 		Colors.colorize(msg, Colors.GRAY, bold=False),
 	))
 
-
-
-class iRadio_Storage(object):
-
-	DATA = {
-		'last_played': None,
-		'playlists': {},
-	}
-
-	_STATION_CLASS_MAP = {s.__name__: s for s in [
-		iHeartArtistStation,
-		iHeartLiveStation,
-		iHeartSongStation,
-		LocalPlaylist,
-		aNONradio,
-		InternetRadio,
-	]}
-
-	def __init__(self, configdir):
-		self._debug = os.environ.get('RADIO_DEBUG') == "1"
-		self.configdir = configdir
-		self._config = self._load_config()
-		self._data = self._load_data()
-
-	def _load_config(self):
-		if not os.path.isdir(self.configdir):
-			os.makedirs(self.configdir)
-		temp_conf = {
-			'last-played-file': os.path.join(self.configdir, 'last_played.json'),
-			'playlist-dir-path': os.path.join(self.configdir, 'playlists'),
-		}
-		if not os.path.isdir(temp_conf['playlist-dir-path']):
-			os.makedirs(temp_conf['playlist-dir-path'])
-		return temp_conf
-
-	def _load_data(self):
-		default_data = self.DATA.copy()
-		if os.path.isfile(self._config['last-played-file']):
-			try:
-				with open(self._config['last-played-file'], 'r') as conf:
-					default_data['last_played'] = json.load(conf, object_pairs_hook=OrderedDict)
-			except Exception as e:
-				if self._debug: print(e)
-		for f in os.listdir(self._config['playlist-dir-path']):
-			if f.endswith('.playlist.json'):
-				pl_name = f.replace(".playlist.json", "")
-				try:
-					with open(os.path.join(self._config['playlist-dir-path'], f), 'r') as pl:
-						default_data['playlists'][pl_name] = json.load(pl, object_pairs_hook=OrderedDict)
-				except Exception as e:
-					if self._debug: print(e)
-		return default_data
-
-	def write(self):
-		for pl_name, obj in self.get_playlists().items():
-			pl_file = os.path.join(self._config['playlist-dir-path'], '{}.playlist.json'.format(pl_name))
-			with open(pl_file, 'w') as pl:
-				json.dump(obj, pl, indent=4)
-
-		with open(self._config['last-played-file'], 'w') as conf:
-			conf.write(json.dumps(self._data['last_played'], indent=4))
-
-	def station_to_dict(self, station_instance):
-		d = station_instance.get_dict()
-		d['__name__'] = station_instance.__class__.__name__
-		d['__id__'] = station_instance.id
-		return d
-
-	def station_from_dict(self, d):
-		if '__name__' not in d:
-			raise Exception("Not a Track/Station dict")
-		return self._STATION_CLASS_MAP[d['__name__']](d)
-
-	def current_track_to_dict(self, station_instance):
-		if isinstance(station_instance, (iHeartArtistStation, iHeartSongStation)):
-			track = station_instance.get_current_track()
-			if track:
-				return self.station_to_dict(track)
-			else:
-				return {}
-		else:
-			return self.station_to_dict(station_instance)
-
-	def update_last_played(self, track):
-		if not isinstance(track, dict):
-			track = self.station_to_dict(track)
-		self._data['last_played'] = track
-		self.write()
-
-	def add_to_playlist(self, playlist_name, track):
-		if not isinstance(track, dict):
-			track = self.current_track_to_dict(track)
-		if playlist_name not in self._data['playlists']:
-			self._data['playlists'][playlist_name] = OrderedDict()
-		if '__id__' in track:
-			track_id = str(track['__id__']) # json.dump automatically converts keys to strings. make it explicit!
-			if track_id not in self._data['playlists'][playlist_name]:
-				self._data['playlists'][playlist_name][track_id] = track #__id__ is unique iheart id
-			self.write()
-
-	def delete_from_playlist_by_id(self, playlist_name, track_id):
-		track_id = str(track_id) # json.dump automatically converts keys to strings. make it explicit!
-		if playlist_name in self._data['playlists'] and track_id in self._data['playlists'][playlist_name]:
-			del self._data['playlists'][playlist_name][track_id]
-			self.write()
-
-	def get_playlists(self):
-		return self._data['playlists']
 
 
 
@@ -261,10 +145,21 @@ class iHeart_CLI(iHeart):
 
 	CONTROLS = COMMON_CONTROLS.copy() # this copy might be modified downstream according to type of station
 
-	def __init__(self, configdir):
-		uuid_file = os.path.join(configdir, "iheart-api.uuid")
+	def __init__(self, config_manager: ConfigurationManager):
+		datadir = config_manager.get_datadir()
+		uuid_file = os.path.join(datadir, "iheart-api.uuid")
 		super().__init__(uuid_filepath=uuid_file)
-		self.store = iRadio_Storage(configdir=configdir)
+		self.store = iRadio_Storage(
+			config_manager=config_manager,
+			supported_stations=[
+				iHeartArtistStation,
+				iHeartLiveStation,
+				iHeartSongStation,
+				LocalPlaylist,
+				aNONradio,
+				InternetRadio,
+			]
+		)
 		self.station_list = []
 		self._station = None
 		self._debug = os.environ.get('RADIO_DEBUG') == "1"
@@ -550,7 +445,7 @@ class iHeart_CLI(iHeart):
 					self.station = new_station
 					self.station.stop()
 					new_station = None
-					continue # This will restart the while loop to make sure everything is set correctly
+					continue # This will restart the while loop to make sure everything is setup correctly
 
 				if self.station is None:
 					new_station = self.station_picker(category=input_category, keyword=search_term)
@@ -558,13 +453,14 @@ class iHeart_CLI(iHeart):
 						# no search results found. clearing input_category and search_term
 						input_category = None
 						search_term = None
-					continue # This will restart the while loop to make sure everything is set correctly
+					continue # This will restart the while loop to make sure everything is setup correctly
 
 				if not self.station.is_playing() and not self.station.is_paused(): # station is not None
-					print(self.station)
+					print(self.station) # NOTE this is the main print statement that is seen on screen
+					self.station.on_track_change(self.store.now_playing)
 					self.station.play()
 					self.store.update_last_played(self.station)
-					continue # This will restart the while loop to make sure everything is set correctly
+					continue # This will restart the while loop to make sure everything is setup correctly
 
 				while True: # start key-press loop
 					self.station.show_time(True)
@@ -684,8 +580,10 @@ def main():
 		print(__version__)
 		return None
 
+	config_manager = ConfigurationManager()
+
 	if args.config_path:
-		print(DATADIR)
+		print(config_manager.conffile)
 		return None
 
 	if args.no_color or not Colors.supported():
@@ -724,7 +622,7 @@ def main():
 	try:
 		# Welcome message
 		print(WELCOME_MSG)
-		radio = iHeart_CLI(DATADIR)
+		radio = iHeart_CLI(config_manager)
 		if category == iHeart_CLI.PLAYLISTS:
 			# set the playlist if name is correct, else will be set to None
 			radio.station = radio.get_playlist_as_station(search_term)
