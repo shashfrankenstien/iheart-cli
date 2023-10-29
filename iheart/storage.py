@@ -72,10 +72,10 @@ class iRadio_Storage(object):
 		for pl_name, obj in self.get_playlists().items():
 			pl_file = os.path.join(self._config['playlist-dir-path'], '{}.playlist.json'.format(pl_name))
 			with open(pl_file, 'w') as pl:
-				json.dump(obj, pl, indent=4)
+				json.dump(obj, pl, indent=4, default=str)
 
 		with open(self._config['last-played-file'], 'w') as conf:
-			conf.write(json.dumps(self._data['last_played'], indent=4))
+			conf.write(json.dumps(self._data['last_played'], indent=4, default=str))
 
 
 	# converters

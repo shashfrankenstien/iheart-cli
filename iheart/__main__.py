@@ -40,7 +40,7 @@ except ImportError:
 			return ch
 
 
-printjson = lambda j: print(json.dumps(j, indent=4))
+printjson = lambda j: print(json.dumps(j, indent=4, default=str))
 wipeline = lambda:sys.stdout.write("\33[2K\r")
 app_msg_color = lambda m: Colors.colorize(m, Colors.YELLOW, bold=False)
 app_critical_color = lambda m: Colors.colorize(m, Colors.RED, bold=False)

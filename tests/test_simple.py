@@ -2,7 +2,7 @@ import os
 os.environ['RADIO_DEBUG'] = "1"
 import time
 import json
-printjson = lambda j: print(json.dumps(j, indent=4))
+printjson = lambda j: print(json.dumps(j, indent=4, default=str))
 
 
 from iheart.player import VLCPlayer
