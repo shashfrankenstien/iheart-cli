@@ -24,6 +24,7 @@ class Station(object):
 		self.user_id = self._dict.get('user_id')
 		self.mrl = self._dict.get('mrl', None)
 		self.name = self._dict.get('name') or self.__class__.__name__
+		self._track_change_cbs = set()
 
 	def get_dict(self):
 		return self._dict
@@ -113,6 +114,8 @@ class Station(object):
 		else:
 			self.get_player().remove_event(VLCPlayer.POSITION_CHANGED)
 
+	def on_track_change(self, func): # register callback function
+		self._track_change_cbs.add(func)
 
 
 
@@ -176,7 +179,6 @@ class TrackListStation(Station):
 		self.current_track = None
 		self.repeat = False
 		self._track_generator = self.iter_tracks()
-		self._track_change_cbs = set()
 
 	def iter_tracks(self):
 		raise NotImplementedError("'iter_tracks' should be overridden in a subclass")
@@ -233,9 +235,6 @@ class TrackListStation(Station):
 		player = self.get_player()
 		player.stop() # calling .stop() is not required here, but it makes sense and doesn't hurt
 		self._play_next()
-
-	def on_track_change(self, func): # register callback function
-		self._track_change_cbs.add(func)
 
 
 
