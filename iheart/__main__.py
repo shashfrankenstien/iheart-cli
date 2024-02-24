@@ -71,12 +71,17 @@ class ExitException(Exception):
 
 
 
-class iHeart(object):
+
+
+
+
+
+
+class iHeart_CLI:
 
 	TRACKS = 'tracks'
 	ARTISTS = 'artists'
 	STATIONS = 'stations'
-
 	# # other choices - Not implemented yet
 	# PLAYLISTS = 'playlists'
 	# ALBUMS = 'albums'
@@ -85,43 +90,14 @@ class iHeart(object):
 	# TALKSHOWS = "talkShows"
 	# TALKTHEMES = "talkThemes"
 
-	def __init__(self, uuid_filepath):
-		self.user = iheart_client.ilogin(uuid_filepath=uuid_filepath)
-		self.user_id = self.user['profileId']
-
-	def search(self, keyword, category=None, startIndex=0):
-		if category is None: category = self.ARTISTS
-		search_res = iheart_client.isearch(keyword, startIndex=startIndex)
-
-		if category==self.STATIONS:
-			station_class = iHeartLiveStation
-		elif category==self.ARTISTS:
-			station_class = iHeartArtistStation
-		elif category==self.TRACKS:
-			station_class = iHeartSongStation
-		else:
-			# return search_res['results'][category]
-			raise NotImplementedError("'{}' not implemented yet")
-
-		out = []
-		for result in search_res['results'][category]:
-			result['user_id'] = self.user_id
-			out.append(station_class(result))
-		return out
-
-
-
-
-class iHeart_CLI(iHeart):
-
 	PLAYLISTS = 'playlists' # this is not iHeart playlists. it is used for local playlists implemented in stations/iheart_radio/playlist.py
 	ANON = 'aNONradio'
 	INTERNET = 'internet-radio'
 
 	CATEGORIES = OrderedDict({
-		iHeart.ARTISTS: CategoryControl('Artist Radio', 'a'),
-		iHeart.TRACKS: CategoryControl('Song Radio', 's'),
-		iHeart.STATIONS: CategoryControl("Live Radio", 'l'),
+		ARTISTS: CategoryControl('Artist Radio', 'a'),
+		TRACKS: CategoryControl('Song Radio', 's'),
+		STATIONS: CategoryControl("Live Radio", 'l'),
 		# non-iheart station types
 		PLAYLISTS: CategoryControl('Playlists', 'p'),
 		ANON: CategoryControl('aNONradio.net', 'n'),
@@ -148,7 +124,8 @@ class iHeart_CLI(iHeart):
 	def __init__(self, config_manager: ConfigurationManager):
 		datadir = config_manager.get_datadir()
 		uuid_file = os.path.join(datadir, "iheart-api.uuid")
-		super().__init__(uuid_filepath=uuid_file)
+		self.user = iheart_client.ilogin(uuid_filepath=uuid_file)
+		self.user_id = self.user['profileId']
 		self.store = iRadio_Storage(
 			config_manager=config_manager,
 			supported_stations=[
@@ -170,6 +147,28 @@ class iHeart_CLI(iHeart):
 		for cmd, action in self.CONTROLS.items():
 			if cmd.strip() != '': # ignore the implied controls that cannot be printed
 				print("\t", app_msg_color(cmd), "  ", action)
+
+
+	def search(self, keyword, category=None, startIndex=0):
+		if category is None: category = self.ARTISTS
+		search_res = iheart_client.isearch(keyword, startIndex=startIndex)
+
+		if category==self.STATIONS:
+			station_class = iHeartLiveStation
+		elif category==self.ARTISTS:
+			station_class = iHeartArtistStation
+		elif category==self.TRACKS:
+			station_class = iHeartSongStation
+		else:
+			# return search_res['results'][category]
+			raise NotImplementedError("'{}' not implemented yet")
+
+		out = []
+		for result in search_res['results'][category]:
+			result['user_id'] = self.user_id
+			out.append(station_class(result))
+		return out
+
 
 	@property
 	def category(self):
@@ -194,6 +193,7 @@ class iHeart_CLI(iHeart):
 	@property
 	def station(self):
 		return self._station
+
 
 	@station.setter
 	def station(self, station):
@@ -434,11 +434,10 @@ class iHeart_CLI(iHeart):
 		return (self.CONTROLS.get(cmd) or '').lower()
 
 
-	def run_cli(self, search_tuple=(None, None)):
+	def run_cli(self, input_category, search_term):
 		cmd = ''
 		new_station = None
 
-		input_category, search_term = search_tuple
 		try:
 			while True:
 				if new_station is not None:
@@ -538,7 +537,7 @@ class iHeart_CLI(iHeart):
 						self.station.show_time(False)
 						self.delete_from_playlist()
 		except:
-			self._debug: traceback.print_exc()
+			if self._debug: traceback.print_exc()
 			raise
 		finally:
 			if self.station is not None:
@@ -628,7 +627,7 @@ def main():
 			radio.station = radio.get_playlist_as_station(search_term)
 			if radio.station is not None and args.shuffle == True:
 				radio.station.toggle_shuffle()
-		radio.run_cli(search_tuple=(category, search_term))
+		radio.run_cli(input_category=category, search_term=search_term)
 
 	except KeyboardInterrupt:
 		print("KeyboardInterrupt")

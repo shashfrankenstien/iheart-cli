@@ -15,8 +15,10 @@ class InternetRadio(LiveStation):
         print("tuning in..")
         super().__init__(station_dicts[0])
 
+
     def info(self):
         return self.get_dict()
+
 
     def _get_descr(self):
         if self.now_playing is not None:

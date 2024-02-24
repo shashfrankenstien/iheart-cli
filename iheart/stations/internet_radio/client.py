@@ -49,6 +49,7 @@ def _ir_parse_meta(meta_txt):
                 meta[key] = int(m.replace(key, ''))
     return meta
 
+
 def ir_search(term, maxRows=10, sortby="listeners"):
     if sortby not in ['featured', 'listeners', 'bitrate']:
         raise ValueError(f"invalid value for sortby - {sortby}")
